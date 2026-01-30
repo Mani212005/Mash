@@ -112,3 +112,6 @@ tmp/
 # Documentation builds
 docs/_build/
 site/
+
+#Files 
+spec.md
