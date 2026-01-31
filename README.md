@@ -1,34 +1,35 @@
 # Mash Voice - Modular Full-Stack Voice Agent Platform
 
-A **clean, modular, Twilio-first voice agent stack** that prioritizes reliability, debuggability, and multi-agent workflows — built for real calls, not demos.
+A **clean, modular, WhatsApp-first messaging agent stack** that prioritizes reliability, debuggability, and multi-agent workflows — built for real conversations, not demos.
 
 ## Features
 
-- 📞 **Voice Call Handling**: Inbound & outbound calls via Twilio with WebSocket media streams
-- 🎤 **Speech-to-Text**: Streaming ASR using Deepgram with accent and noise support
-- 🔊 **Text-to-Speech**: Low-latency TTS via Deepgram
+- 💬 **WhatsApp Integration**: Direct integration with Meta WhatsApp Business API
+- 🎤 **Voice Message Support**: Transcription of voice messages using Deepgram ASR
+- 🔊 **Text-to-Speech**: Low-latency TTS via Deepgram (for audio responses)
 - 🤖 **Multi-Agent System**: Primary, specialist, and handoff agents with context-aware routing
 - 🔧 **Function Calling**: JSON-schema based tools with workflow engine
-- 📊 **Observability**: Per-call tracing, timeline view, and debug console
+- 📊 **Observability**: Per-conversation tracing, timeline view, and debug console
 
 ## Architecture
 
 ```
-Caller (Phone)
+User (WhatsApp)
    ↓
-Twilio Voice Call
-   ↓ (Media Stream / WebSocket)
+Meta WhatsApp Business API
+   ↓ (Webhook)
 Backend (Python – FastAPI)
-   ├─ ASR (Deepgram Streaming)
+   ├─ WhatsApp Service (Message Handler)
+   ├─ ASR (Deepgram - for voice messages)
    ├─ Agent Orchestrator
    │    ├─ Agent Router
    │    ├─ State / Context Manager
    │    └─ Workflow Engine
    ├─ Tool / Function Executor
    ├─ TTS (Deepgram)
-   └─ Webhooks & Event Store
+   └─ Event Store
    ↓
-Twilio Audio Response
+WhatsApp Response
 ```
 
 ## Quick Start
@@ -38,7 +39,7 @@ Twilio Audio Response
 - Python 3.11+
 - Redis (for sessions and state)
 - PostgreSQL (for logs and metadata)
-- Twilio Account
+- Meta Developer Account with WhatsApp Business API access
 - Deepgram API Key
 - OpenAI API Key
 
@@ -77,13 +78,20 @@ alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Setting Up Twilio
+### Setting Up WhatsApp Business API
 
-1. Create a Twilio account and get a phone number
-2. Configure your webhook URL in Twilio Console:
-   - Voice URL: `https://your-domain.com/api/v1/twilio/voice`
-   - Status Callback: `https://your-domain.com/api/v1/twilio/status`
-3. For local development, use ngrok:
+1. Go to [Meta for Developers](https://developers.facebook.com/) and create an app
+2. Add WhatsApp product to your app
+3. Get your credentials from the WhatsApp dashboard:
+   - **Phone Number ID**: Found in the WhatsApp > Getting Started section
+   - **Access Token**: Generate a permanent token or use a temporary one
+   - **Verify Token**: Create your own secret string for webhook verification
+   - **App Secret**: Found in App Settings > Basic
+4. Configure webhook:
+   - Callback URL: `https://your-domain.com/api/v1/whatsapp/webhook`
+   - Verify Token: Your chosen verify token
+   - Subscribe to: `messages`, `messaging_postbacks`
+5. For local development, use ngrok:
 ```bash
 ngrok http 8000
 ```
@@ -97,9 +105,13 @@ mash-voice/
 │   ├── config.py            # Configuration management
 │   ├── api/
 │   │   ├── routes/          # API route handlers
+│   │   │   ├── whatsapp.py  # WhatsApp webhook handlers
+│   │   │   ├── agents.py    # Agent management
+│   │   │   ├── calls.py     # Conversation history
+│   │   │   └── websocket.py # WebSocket connections
 │   │   └── middleware/      # Custom middleware
 │   ├── services/
-│   │   ├── call_service.py      # Twilio call handling
+│   │   ├── whatsapp_service.py  # WhatsApp API client
 │   │   ├── asr_service.py       # Deepgram ASR
 │   │   ├── tts_service.py       # Deepgram TTS
 │   │   ├── agent_service.py     # Agent orchestration
@@ -107,10 +119,10 @@ mash-voice/
 │   ├── agents/
 │   │   ├── base_agent.py        # Base agent class
 │   │   ├── primary_agent.py     # Default conversational agent
-│   │   └── specialist_agents/   # Task-specific agents
+│   │   └── specialist_agents.py # Task-specific agents
 │   ├── tools/
 │   │   ├── base_tool.py         # Base tool class
-│   │   └── implementations/     # Actual tool implementations
+│   │   └── implementations.py   # Tool implementations
 │   ├── models/
 │   │   ├── database.py          # SQLAlchemy models
 │   │   └── schemas.py           # Pydantic schemas
@@ -129,16 +141,17 @@ mash-voice/
 
 ## API Endpoints
 
-### Twilio Webhooks
-- `POST /api/v1/twilio/voice` - Initial call webhook
-- `POST /api/v1/twilio/status` - Call status updates
-- `WebSocket /api/v1/twilio/stream/{call_sid}` - Media stream
+### WhatsApp Webhooks
+- `GET /api/v1/whatsapp/webhook` - Webhook verification (Meta challenge)
+- `POST /api/v1/whatsapp/webhook` - Incoming message handler
+- `POST /api/v1/whatsapp/send` - Send message (admin/testing)
+- `GET /api/v1/whatsapp/health` - WhatsApp service health check
 
-### Call Management
-- `GET /api/v1/calls` - List calls
-- `GET /api/v1/calls/{call_id}` - Get call details
-- `POST /api/v1/calls/outbound` - Initiate outbound call
-- `POST /api/v1/calls/{call_id}/end` - End active call
+### Conversation Management
+- `GET /api/v1/calls` - List conversations
+- `GET /api/v1/calls/{call_id}` - Get conversation details
+- `GET /api/v1/calls/{call_id}/timeline` - Event timeline
+- `GET /api/v1/calls/{call_id}/transcript` - Full transcript
 
 ### Agents
 - `GET /api/v1/agents` - List available agents
@@ -146,9 +159,7 @@ mash-voice/
 - `GET /api/v1/agents/{agent_id}` - Get agent config
 
 ### Debug & Observability
-- `GET /api/v1/calls/{call_id}/timeline` - Call event timeline
-- `GET /api/v1/calls/{call_id}/transcript` - Full transcript
-- `WebSocket /api/v1/calls/{call_id}/live` - Live call stream
+- `WebSocket /api/v1/ws/{session_id}` - Live session stream
 
 ## Configuration
 
@@ -156,12 +167,27 @@ Key environment variables:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `TWILIO_ACCOUNT_SID` | Twilio Account SID | Yes |
-| `TWILIO_AUTH_TOKEN` | Twilio Auth Token | Yes |
+| `WHATSAPP_ACCESS_TOKEN` | Meta WhatsApp API Access Token | Yes |
+| `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp Business Phone Number ID | Yes |
+| `WHATSAPP_VERIFY_TOKEN` | Webhook verification token | Yes |
+| `WHATSAPP_APP_SECRET` | Meta App Secret for signature verification | Yes |
+| `META_API_VERSION` | Meta Graph API version (default: v18.0) | No |
 | `DEEPGRAM_API_KEY` | Deepgram API Key | Yes |
-| `OPENAI_API_KEY` | OpenAI API Key | Yes |
+| `GEMINI_API_KEY` | Google Gemini API Key | Yes |
+| `GEMINI_MODEL` | Gemini model (default: gemini-2.0-flash) | No |
 | `REDIS_URL` | Redis connection URL | Yes |
 | `DATABASE_URL` | PostgreSQL connection URL | Yes |
+
+## WhatsApp Message Types
+
+The platform supports the following WhatsApp message types:
+
+| Type | Description | Handling |
+|------|-------------|----------|
+| Text | Regular text messages | Processed by agent |
+| Audio | Voice messages | Transcribed via Deepgram, then processed |
+| Interactive | Button/List replies | Extracted and processed as text |
+| Image/Video | Media messages | Acknowledgment sent (coming soon) |
 
 ## Creating Custom Agents
 
@@ -209,6 +235,41 @@ class BookAppointmentTool(BaseTool):
         return {"success": True, "confirmation": "APT-12345"}
 ```
 
+## Sending Interactive Messages
+
+```python
+from app.services.whatsapp_service import WhatsAppService
+
+whatsapp = WhatsAppService()
+
+# Send buttons
+await whatsapp.send_interactive_buttons(
+    to_number="1234567890",
+    body_text="How can I help you today?",
+    buttons=[
+        {"id": "schedule", "title": "Schedule Appointment"},
+        {"id": "support", "title": "Get Support"},
+        {"id": "info", "title": "More Information"},
+    ]
+)
+
+# Send list menu
+await whatsapp.send_interactive_list(
+    to_number="1234567890",
+    body_text="Please select a service:",
+    button_text="View Services",
+    sections=[
+        {
+            "title": "Popular Services",
+            "rows": [
+                {"id": "svc1", "title": "Service 1", "description": "Description"},
+                {"id": "svc2", "title": "Service 2", "description": "Description"},
+            ]
+        }
+    ]
+)
+```
+
 ## Development
 
 ### Running Tests
@@ -226,6 +287,14 @@ ruff check app/ tests/ --fix
 ```bash
 mypy app/
 ```
+
+## Meta API Limitations
+
+- **24-hour window**: You can only send free-form messages within 24 hours of the user's last message
+- **Template messages**: To initiate conversations, use pre-approved templates
+- **Rate limits**: Be aware of Meta's rate limits for your tier
+- **Interactive buttons**: Maximum 3 buttons per message
+- **List items**: Maximum 10 items per section
 
 ## License
 

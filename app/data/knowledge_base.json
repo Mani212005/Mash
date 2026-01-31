@@ -1,0 +1,161 @@
+{
+  "business_info": {
+    "name": "TechGadgets Store",
+    "tagline": "Your One-Stop Shop for Tech Accessories",
+    "tone": "friendly, helpful, and professional",
+    "timezone": "America/New_York",
+    "operating_hours": {
+      "Monday": "9:00 AM - 6:00 PM",
+      "Tuesday": "9:00 AM - 6:00 PM",
+      "Wednesday": "9:00 AM - 6:00 PM",
+      "Thursday": "9:00 AM - 6:00 PM",
+      "Friday": "9:00 AM - 6:00 PM",
+      "Saturday": "10:00 AM - 4:00 PM",
+      "Sunday": "Closed"
+    },
+    "contact": {
+      "phone": "+1 (555) 123-4567",
+      "email": "support@techgadgets.example.com",
+      "website": "https://techgadgets.example.com"
+    },
+    "social_media": {
+      "instagram": "@techgadgets",
+      "twitter": "@techgadgets"
+    }
+  },
+  "faqs": [
+    {
+      "id": "shipping-001",
+      "category": "shipping",
+      "question": "How long does shipping take?",
+      "answer": "Standard shipping takes 5-7 business days. Express shipping (2-3 days) is available for an additional $9.99. Free shipping on orders over $50!",
+      "keywords": ["shipping", "delivery", "how long", "days", "arrive"]
+    },
+    {
+      "id": "shipping-002",
+      "category": "shipping",
+      "question": "Do you ship internationally?",
+      "answer": "Yes! We ship to over 50 countries. International shipping typically takes 10-15 business days. Shipping costs vary by location and are calculated at checkout.",
+      "keywords": ["international", "worldwide", "global", "overseas", "country"]
+    },
+    {
+      "id": "shipping-003",
+      "category": "shipping",
+      "question": "How can I track my order?",
+      "answer": "Once your order ships, you'll receive an email with your tracking number. You can also give me your order ID and I'll look up the tracking info for you!",
+      "keywords": ["track", "tracking", "where is", "status", "order status"]
+    },
+    {
+      "id": "returns-001",
+      "category": "returns",
+      "question": "What is your return policy?",
+      "answer": "We offer a 30-day return policy for unused items in original packaging. Simply initiate a return through your account or contact us. Refunds are processed within 5-7 business days after we receive the item.",
+      "keywords": ["return", "refund", "money back", "send back", "return policy"]
+    },
+    {
+      "id": "returns-002",
+      "category": "returns",
+      "question": "How do I return an item?",
+      "answer": "To return an item: 1) Contact us with your order ID, 2) We'll email you a prepaid return label, 3) Pack the item securely and drop it off at any carrier location. Your refund will be processed once we receive it.",
+      "keywords": ["how to return", "return process", "send back", "return item"]
+    },
+    {
+      "id": "returns-003",
+      "category": "returns",
+      "question": "Can I exchange an item?",
+      "answer": "Absolutely! For exchanges, please return the original item and place a new order for the replacement. This ensures you get your new item as quickly as possible. We'll refund the original once received.",
+      "keywords": ["exchange", "swap", "different size", "different color", "replace"]
+    },
+    {
+      "id": "payment-001",
+      "category": "payments",
+      "question": "What payment methods do you accept?",
+      "answer": "We accept all major credit cards (Visa, MasterCard, Amex, Discover), PayPal, Apple Pay, Google Pay, and Shop Pay. All transactions are securely encrypted.",
+      "keywords": ["payment", "pay", "credit card", "paypal", "apple pay"]
+    },
+    {
+      "id": "payment-002",
+      "category": "payments",
+      "question": "Is my payment information secure?",
+      "answer": "Yes! We use industry-standard SSL encryption and are PCI-DSS compliant. We never store your full credit card details on our servers. Your security is our top priority.",
+      "keywords": ["secure", "security", "safe", "encryption", "privacy"]
+    },
+    {
+      "id": "payment-003",
+      "category": "payments",
+      "question": "Do you offer payment plans?",
+      "answer": "Yes! For orders over $100, you can use Shop Pay Installments or Klarna to split your purchase into 4 interest-free payments. Select your preferred option at checkout.",
+      "keywords": ["payment plan", "installments", "split", "klarna", "buy now pay later"]
+    },
+    {
+      "id": "products-001",
+      "category": "products",
+      "question": "Are your products covered by warranty?",
+      "answer": "Yes! All our products come with a minimum 1-year manufacturer warranty. Some items have extended warranties. If you experience any defects, contact us and we'll help you get a replacement.",
+      "keywords": ["warranty", "guarantee", "defective", "broken", "covered"]
+    },
+    {
+      "id": "products-002",
+      "category": "products",
+      "question": "How do I know if a product is compatible with my device?",
+      "answer": "Each product page lists compatible devices. If you're unsure, send me your device model and the product you're interested in, and I'll check compatibility for you!",
+      "keywords": ["compatible", "compatibility", "work with", "fit", "device"]
+    },
+    {
+      "id": "account-001",
+      "category": "account",
+      "question": "How do I create an account?",
+      "answer": "You can create an account during checkout or visit our website and click 'Sign Up'. Benefits include order tracking, faster checkout, and exclusive member discounts!",
+      "keywords": ["create account", "sign up", "register", "new account"]
+    },
+    {
+      "id": "account-002",
+      "category": "account",
+      "question": "I forgot my password. How do I reset it?",
+      "answer": "No problem! Visit our website, click 'Login', then 'Forgot Password'. Enter your email and we'll send you a reset link. The link expires in 24 hours for security.",
+      "keywords": ["forgot password", "reset password", "can't login", "password help"]
+    },
+    {
+      "id": "order-001",
+      "category": "orders",
+      "question": "Can I modify my order after placing it?",
+      "answer": "We process orders quickly! If your order hasn't shipped yet, contact us ASAP and we'll try to make changes. Once shipped, you'll need to wait for delivery and then request a return/exchange.",
+      "keywords": ["modify order", "change order", "cancel", "update order"]
+    },
+    {
+      "id": "order-002",
+      "category": "orders",
+      "question": "My order arrived damaged. What should I do?",
+      "answer": "We're so sorry about that! Please take photos of the damage and contact us within 48 hours. We'll send a replacement right away or issue a full refund - your choice!",
+      "keywords": ["damaged", "broken", "arrived broken", "package damaged"]
+    },
+    {
+      "id": "promo-001",
+      "category": "promotions",
+      "question": "Do you have any current promotions or discounts?",
+      "answer": "We frequently run sales and promotions! Sign up for our newsletter to get 10% off your first order, plus early access to deals. Follow us on social media for flash sales!",
+      "keywords": ["discount", "coupon", "promo code", "sale", "deal", "promotion"]
+    },
+    {
+      "id": "promo-002",
+      "category": "promotions",
+      "question": "How do I apply a coupon code?",
+      "answer": "Enter your coupon code in the 'Discount Code' field at checkout, then click 'Apply'. The discount will be reflected in your total. Note: Only one coupon can be used per order.",
+      "keywords": ["apply coupon", "use code", "discount code", "promo code", "coupon code"]
+    },
+    {
+      "id": "general-001",
+      "category": "general",
+      "question": "How can I contact customer support?",
+      "answer": "You're already chatting with us! 😊 You can also email support@techgadgets.example.com or call +1 (555) 123-4567 during business hours. We typically respond within 24 hours.",
+      "keywords": ["contact", "support", "help", "reach", "customer service"]
+    },
+    {
+      "id": "general-002",
+      "category": "general",
+      "question": "Do you have a physical store?",
+      "answer": "We're currently an online-only store, which allows us to offer competitive prices! All orders ship directly from our warehouse to your door.",
+      "keywords": ["physical store", "location", "store location", "visit", "in person"]
+    }
+  ]
+}
