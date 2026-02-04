@@ -10,7 +10,16 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import agents_router, calls_router, whatsapp_router, websocket_router
+from app.api import (
+    agents_router,
+    calls_router,
+    conversations_router,
+    dashboard_router,
+    knowledge_router,
+    tickets_router,
+    websocket_router,
+    whatsapp_router,
+)
 from app.config import get_settings
 from app.models import HealthCheck, init_database
 from app.tools import register_all_tools
@@ -131,6 +140,10 @@ async def root():
 
 
 # Include routers
+app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(conversations_router, prefix="/api/v1")
+app.include_router(knowledge_router, prefix="/api/v1")
+app.include_router(tickets_router, prefix="/api/v1")
 app.include_router(whatsapp_router, prefix="/api/v1")
 app.include_router(calls_router, prefix="/api/v1")
 app.include_router(agents_router, prefix="/api/v1")
