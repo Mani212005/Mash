@@ -15,6 +15,14 @@ export function formatDate(date: Date | string): string {
   });
 }
 
+export function formatTime(date: Date | string): string {
+  const d = new Date(date);
+  return d.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export function formatRelativeTime(date: Date | string): string {
   const now = new Date();
   const d = new Date(date);
@@ -34,4 +42,21 @@ export function formatRelativeTime(date: Date | string): string {
 export function truncate(str: string, length: number): string {
   if (str.length <= length) return str;
   return str.slice(0, length) + '...';
+}
+
+export function getInitials(input: string): string {
+  if (!input) return '?';
+  
+  // If it's a phone number like +1234567890, extract first 2 digits
+  if (input.startsWith('+') || /^\d+$/.test(input)) {
+    return input.slice(-2).toUpperCase();
+  }
+  
+  // If it's a name, get first letters of words
+  return input
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 }
