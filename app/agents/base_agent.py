@@ -281,12 +281,14 @@ class AgentResponse:
         tool_calls: list[ToolCall] | None = None,
         context_updates: dict[str, Any] | None = None,
         error: str | None = None,
+        transfer_to: str | None = None,
     ):
         self.agent_id = agent_id
         self.text = text
         self.tool_calls = tool_calls or []
         self.context_updates = context_updates or {}
         self.error = error
+        self.transfer_to = transfer_to
         self.timestamp = datetime.utcnow()
 
     def to_dict(self) -> dict[str, Any]:
@@ -296,5 +298,6 @@ class AgentResponse:
             "tool_calls": [tc.to_dict() for tc in self.tool_calls],
             "context_updates": self.context_updates,
             "error": self.error,
+            "transfer_to": self.transfer_to,
             "timestamp": self.timestamp.isoformat(),
         }
