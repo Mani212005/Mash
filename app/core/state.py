@@ -215,6 +215,24 @@ class StateManager:
         r = await self._get_redis()
         return await r.sismember(ACTIVE_CALLS_SET, call_sid)
 
+    # ============ Generic State (for non-call sessions) ============
+
+    async def get_state(self, session_id: str) -> dict[str, Any] | None:
+        """Get generic state for a session (e.g., WhatsApp conversation)."""
+        r = await self._get_redis()
+        key = f"session:state:{session_id}"
+        data = await r.get(key)
+        if data:
+            return json.loads(data)
+        return None
+
+    async def set_state(self, session_id: str, state: dict[str, Any]) -> None:
+        """Set generic state for a session."""
+        r = await self._get_redis()
+        key = f"session:state:{session_id}"
+        await r.set(key, json.dumps(state), ex=CALL_DATA_TTL)
+        logger.debug("Set session state", session_id=session_id)
+
 
 # Singleton instance
 _state_manager: StateManager | None = None

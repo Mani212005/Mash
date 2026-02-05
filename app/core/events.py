@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 class EventStore:
     """Stores and retrieves call events."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession | None = None):
         self.session = session
 
     # ============ Call Events ============
