@@ -28,7 +28,7 @@ class Call(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     twilio_call_sid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     
-    # Call metadata
+    # Call call_metadata
     direction: Mapped[str] = mapped_column(String(16))  # inbound, outbound
     from_number: Mapped[str] = mapped_column(String(32))
     to_number: Mapped[str] = mapped_column(String(32))
@@ -44,8 +44,8 @@ class Call(Base):
     current_agent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     agent_history: Mapped[list[str]] = mapped_column(JSON, default=list)
     
-    # Metadata
-    metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # call_Metadata
+    call_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     
     # Relationships
     events: Mapped[list["CallEvent"]] = relationship("CallEvent", back_populates="call", lazy="selectin")
@@ -100,7 +100,7 @@ class Transcript(Base):
     start_time_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     end_time_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     
-    # ASR metadata
+    # ASR call_metadata
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     
     # Relationship
@@ -201,4 +201,4 @@ async def init_database():
     """Initialize database tables."""
     engine = get_engine()
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.call_metadata.create_all)

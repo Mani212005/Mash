@@ -2,11 +2,15 @@
 Mash Voice - API Package
 """
 
-from app.api.routes import agents_router, calls_router, twilio_router, websocket_router
+from app.api.routes import agents_router, calls_router,conversations_router, websocket_router, dashboard_router, knowledge_router, tickets_router, whatsapp_router
 
 __all__ = [
     "agents_router",
     "calls_router",
-    "twilio_router",
     "websocket_router",
+    "conversations_router",
+    "dashboard_router",
+    "knowledge_router",
+    "tickets_router",
+    "whatsapp_router",
 ]

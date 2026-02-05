@@ -24,7 +24,7 @@ from app.models import (
     TranscriptSegment,
     get_db_session,
 )
-from app.services import get_call_manager, get_orchestrator
+from app.services import get_orchestrator
 from app.utils import get_logger
 
 logger = get_logger(__name__)

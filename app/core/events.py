@@ -74,6 +74,26 @@ class EventStore:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def emit(
+        self,
+        event_type: str,
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Emit a generic event (for non-call events like WhatsApp messages).
+        
+        Args:
+            event_type: Type of event (e.g., "whatsapp.message.received")
+            data: Event data
+        """
+        logger.info(
+            "Event emitted",
+            event_type=event_type,
+            data=data,
+        )
+        # For now, just log the event
+        # In the future, this could store to a separate events table
+
     # ============ Call Management ============
 
     async def create_call(
@@ -316,3 +336,17 @@ class EventStore:
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+
+# Singleton instance
+_event_store: EventStore | None = None
+
+
+def get_event_store() -> EventStore:
+    """Get the event store singleton instance."""
+    global _event_store
+    if _event_store is None:
+        from app.db import get_session
+        # Create a session for the event store
+        _event_store = EventStore(session=get_session())
+    return _event_store
