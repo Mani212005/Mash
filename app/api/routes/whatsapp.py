@@ -104,7 +104,7 @@ async def process_webhook_messages(payload: dict[str, Any]):
     manager = get_conversation_manager()
     orchestrator = get_agent_orchestrator()
     state_manager = get_state_manager()
-    event_store = get_event_store()
+    event_store = await get_event_store()
     
     # Parse messages from webhook
     messages = manager.whatsapp.parse_webhook_payload(payload)

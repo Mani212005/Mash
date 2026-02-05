@@ -342,11 +342,13 @@ class EventStore:
 _event_store: EventStore | None = None
 
 
-def get_event_store() -> EventStore:
+async def get_event_store() -> EventStore:
     """Get the event store singleton instance."""
     global _event_store
     if _event_store is None:
-        from app.db import get_session
+        from app.models.database import get_session_factory
         # Create a session for the event store
-        _event_store = EventStore(session=get_session())
+        factory = get_session_factory()
+        session = factory()
+        _event_store = EventStore(session=session)
     return _event_store
