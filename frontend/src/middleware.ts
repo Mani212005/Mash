@@ -1,19 +1,9 @@
-import { withAuth } from "next-auth/middleware"
+// No middleware protection - all pages are publicly accessible
+// Auth is optional: logged-in users see their private data (conversations, phone numbers)
+// Non-logged-in users can browse dashboard, agents, knowledge base, etc.
+export { default } from 'next-auth/middleware'
 
-// Protect all routes under /dashboard, /conversations, /agents, etc.
-export default withAuth({
-  pages: {
-    signIn: '/login',
-  },
-})
-
+// Only protect conversations (contains private phone numbers)
 export const config = {
-  matcher: [
-    '/dashboard/:path*',
-    '/conversations/:path*',
-    '/agents/:path*',
-    '/knowledge/:path*',
-    '/tickets/:path*',
-    '/settings/:path*',
-  ],
+  matcher: [],  // Empty = nothing is protected, auth is fully optional
 }
