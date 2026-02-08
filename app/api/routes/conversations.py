@@ -86,47 +86,51 @@ async def list_conversations(
             )
             conversations.append(conversation)
         
-        # Also get real WhatsApp conversations (pattern: call:context:*)
-        async for key in redis.scan_iter("call:context:*"):
+        # Get real WhatsApp conversations (pattern: session:state:*)
+        # This is where actual WhatsApp conversations are stored
+        import json
+        async for key in redis.scan_iter("session:state:*"):
             try:
-                context_data = await redis.get(key)
-                if not context_data:
+                state_data = await redis.get(key)
+                if not state_data:
                     continue
                 
-                import json
-                context = json.loads(context_data)
+                state = json.loads(state_data)
+                messages = state.get('messages', [])
                 
-                # Extract conversation info
-                call_sid = key.split(':')[-1]
-                conv_history = context.get('conversation_history', [])
-                
-                if not conv_history:
+                if not messages:
                     continue
+                
+                session_id = key.split(':')[-1]
                 
                 # Determine status
                 conv_status = 'active'
-                if context.get('metadata', {}).get('ended'):
+                if state.get('ended'):
                     conv_status = 'ended'
-                elif 'handoff' in context.get('current_agent_id', ''):
+                elif 'handoff' in state.get('current_agent', ''):
                     conv_status = 'escalated'
                 
                 # Filter by status if provided
                 if status and conv_status != status:
                     continue
                 
+                # Get timestamps
+                first_msg = messages[0] if messages else {}
+                last_msg = messages[-1] if messages else {}
+                
                 conversation = Conversation(
-                    id=call_sid,
-                    phone_number=context.get('metadata', {}).get('phone_number', 'unknown'),
-                    started_at=conv_history[0].get('timestamp', datetime.utcnow().isoformat()) if conv_history else datetime.utcnow().isoformat(),
-                    last_message_at=conv_history[-1].get('timestamp', datetime.utcnow().isoformat()) if conv_history else datetime.utcnow().isoformat(),
-                    message_count=len(conv_history),
+                    id=session_id,
+                    phone_number=state.get('phone_number', 'unknown'),
+                    started_at=first_msg.get('timestamp', datetime.utcnow().isoformat()),
+                    last_message_at=last_msg.get('timestamp', datetime.utcnow().isoformat()),
+                    message_count=len(messages),
                     status=conv_status,
-                    current_agent=context.get('current_agent_id', 'customer_service_agent'),
-                    metadata=context.get('metadata', {})
+                    current_agent=state.get('current_agent', 'customer_service_agent'),
+                    metadata=state.get('context', {})
                 )
                 conversations.append(conversation)
             except Exception as e:
-                logger.warning(f"Error parsing context {key}: {e}")
+                logger.warning(f"Error parsing session state {key}: {e}")
                 continue
         
         # Sort by last message time (most recent first)
@@ -156,26 +160,29 @@ async def get_conversation(conversation_id: str):
         conv_data = await redis.hgetall(conv_key)
         
         if not conv_data:
-            # Try WhatsApp conversation (call:context:*)
-            context_key = f"call:context:{conversation_id}"
-            context_data = await redis.get(context_key)
+            # Try WhatsApp conversation (session:state:*)
+            import json
+            session_key = f"session:state:{conversation_id}"
+            state_data = await redis.get(session_key)
             
-            if not context_data:
+            if not state_data:
                 raise HTTPException(status_code=404, detail="Conversation not found")
             
-            # Parse context and convert to conversation format
-            import json
-            context = json.loads(context_data)
-            conv_history = context.get('conversation_history', [])
+            # Parse state and convert to conversation format
+            state = json.loads(state_data)
+            messages = state.get('messages', [])
+            
+            first_msg = messages[0] if messages else {}
+            last_msg = messages[-1] if messages else {}
             
             conv_dict = {
                 'id': conversation_id,
-                'phone_number': context.get('metadata', {}).get('phone_number', 'unknown'),
-                'started_at': conv_history[0].get('timestamp', datetime.utcnow().isoformat()) if conv_history else datetime.utcnow().isoformat(),
-                'last_message_at': conv_history[-1].get('timestamp', datetime.utcnow().isoformat()) if conv_history else datetime.utcnow().isoformat(),
-                'message_count': str(len(conv_history)),
+                'phone_number': state.get('phone_number', 'unknown'),
+                'started_at': first_msg.get('timestamp', datetime.utcnow().isoformat()),
+                'last_message_at': last_msg.get('timestamp', datetime.utcnow().isoformat()),
+                'message_count': str(len(messages)),
                 'status': 'active',
-                'current_agent': context.get('current_agent_id', 'customer_service_agent'),
+                'current_agent': state.get('current_agent', 'customer_service_agent'),
             }
         else:
             conv_dict = conv_data
@@ -235,23 +242,23 @@ async def get_conversation_messages(conversation_id: str):
                 )
                 messages.append(message)
         else:
-            # Try WhatsApp conversation (from call context)
-            context_key = f"call:context:{conversation_id}"
-            context_data = await redis.get(context_key)
+            # Try WhatsApp conversation (from session state)
+            session_key = f"session:state:{conversation_id}"
+            state_data = await redis.get(session_key)
             
-            if context_data:
-                context = json.loads(context_data)
-                conv_history = context.get('conversation_history', [])
+            if state_data:
+                state = json.loads(state_data)
+                message_list = state.get('messages', [])
                 
-                for idx, turn in enumerate(conv_history):
+                for idx, msg_data in enumerate(message_list):
                     message = Message(
-                        id=f"msg_{conversation_id}_{idx}",
+                        id=msg_data.get('message_id', f"msg_{conversation_id}_{idx}"),
                         conversation_id=conversation_id,
-                        role=turn.get('role', 'user'),
-                        content=turn.get('content', ''),
-                        timestamp=turn.get('timestamp', datetime.utcnow().isoformat()),
+                        role=msg_data.get('role', 'user'),
+                        content=msg_data.get('content', ''),
+                        timestamp=msg_data.get('timestamp', datetime.utcnow().isoformat()),
                         message_type='text',
-                        agent=turn.get('metadata', {}).get('agent'),
+                        agent=msg_data.get('agent'),
                         tool_calls=None,
                     )
                     messages.append(message)
