@@ -223,22 +223,18 @@ class DeepgramASRService:
         try:
             client = self._get_client()
             
-            # Transcribe using prerecorded API (for file/buffer transcription)
-            # Deepgram SDK v3+ uses prerecorded for async file transcription
-            options = {
-                "model": "nova-2",
-                "language": language,
-                "smart_format": True,
-                "punctuate": True,
-            }
-            
-            response = await client.listen.prerecorded.v("1").transcribe_file(
-                {"buffer": audio_data},
-                options
+            # Deepgram SDK v5 API: client.listen.v1.media.transcribe_file()
+            # All options are passed as keyword arguments directly
+            response = await client.listen.v1.media.transcribe_file(
+                request=audio_data,
+                model="nova-2",
+                language=language,
+                smart_format=True,
+                punctuate=True,
             )
             
-            # Extract transcript from response
-            if response and hasattr(response, 'results') and response.results:
+            # Extract transcript from response (ListenV1Response)
+            if response and response.results:
                 channels = response.results.channels
                 if channels and len(channels) > 0 and channels[0].alternatives:
                     transcript = channels[0].alternatives[0].transcript
