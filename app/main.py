@@ -17,6 +17,7 @@ from app.api import (
     dashboard_router,
     knowledge_router,
     tickets_router,
+    users_router,
     websocket_router,
     whatsapp_router,
     seed_router,
@@ -147,9 +148,9 @@ app.include_router(tickets_router, prefix="/api/v1")
 app.include_router(whatsapp_router, prefix="/api/v1")
 app.include_router(calls_router, prefix="/api/v1")
 app.include_router(agents_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
 app.include_router(websocket_router, prefix="/api/v1")
 app.include_router(seed_router, prefix="/api/v1")
-app.include_router(websocket_router, prefix="/api/v1")
 
 
 # Run with uvicorn

@@ -10,6 +10,7 @@ from app.api.routes import (
     knowledge_router,
     seed_router,
     tickets_router,
+    users_router,
     websocket_router,
     whatsapp_router,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "knowledge_router",
     "seed_router",
     "tickets_router",
+    "users_router",
     "websocket_router",
     "whatsapp_router",
 ]

@@ -62,10 +62,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
 // Conversations
 export async function getConversations(
-  status?: 'active' | 'ended' | 'escalated'
+  status?: 'active' | 'ended' | 'escalated',
+  userEmail?: string
 ): Promise<Conversation[]> {
   const params = new URLSearchParams();
   if (status) params.set('status', status);
+  if (userEmail) params.set('user_email', userEmail);
   const query = params.toString();
   return fetchAPI<Conversation[]>(`/conversations${query ? `?${query}` : ''}`);
 }
@@ -199,6 +201,36 @@ export async function clearDemoConversations(): Promise<{ success: boolean; mess
   });
 }
 
+// User Phone Management
+export interface UserPhones {
+  email: string;
+  phone_numbers: string[];
+}
+
+export async function getUserPhones(email: string): Promise<UserPhones> {
+  const params = new URLSearchParams({ email });
+  return fetchAPI<UserPhones>(`/users/phones?${params}`);
+}
+
+export async function linkPhone(email: string, phoneNumber: string): Promise<UserPhones> {
+  return fetchAPI<UserPhones>('/users/phones/link', {
+    method: 'POST',
+    body: JSON.stringify({ email, phone_number: phoneNumber }),
+  });
+}
+
+export async function unlinkPhone(email: string, phoneNumber: string): Promise<UserPhones> {
+  return fetchAPI<UserPhones>('/users/phones/unlink', {
+    method: 'POST',
+    body: JSON.stringify({ email, phone_number: phoneNumber }),
+  });
+}
+
+export async function getAvailablePhones(email: string): Promise<string[]> {
+  const params = new URLSearchParams({ email });
+  return fetchAPI<string[]>(`/users/phones/available?${params}`);
+}
+
 // Export API object for convenient access
 export const api = {
   getHealth,
@@ -219,6 +251,10 @@ export const api = {
   createWebSocket,
   seedConversations,
   clearDemoConversations,
+  getUserPhones,
+  linkPhone,
+  unlinkPhone,
+  getAvailablePhones,
 };
 
 export default api;

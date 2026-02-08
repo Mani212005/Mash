@@ -2,10 +2,12 @@
 Mash Voice - Conversations Routes
 
 REST API endpoints for WhatsApp conversation management.
+Supports user-scoped conversations via Google account linking.
 """
 
+import json
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -15,6 +17,17 @@ from app.utils import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/conversations", tags=["conversations"])
+
+
+async def _get_user_phones(email: str) -> Set[str]:
+    """Get the set of phone numbers linked to a user's Google account."""
+    state_manager = get_state_manager()
+    redis = await state_manager._get_redis()
+    key = f"user:phones:{email}"
+    data = await redis.get(key)
+    if data:
+        return set(json.loads(data))
+    return set()
 
 
 class Message(BaseModel):
@@ -43,19 +56,29 @@ class Conversation(BaseModel):
 
 @router.get("", response_model=List[Conversation])
 async def list_conversations(
-    status: Optional[str] = Query(None, description="Filter by status: active, ended, escalated")
+    status: Optional[str] = Query(None, description="Filter by status: active, ended, escalated"),
+    user_email: Optional[str] = Query(None, description="Filter by user's Google email (only show linked phone numbers)"),
 ):
     """
     List all WhatsApp conversations.
     
     Query Parameters:
     - status: Filter by conversation status (optional)
+    - user_email: If provided, only return conversations for phone numbers linked to this Google account
     
     Returns list of conversations with metadata.
     """
     try:
         state_manager = get_state_manager()
         redis = await state_manager._get_redis()
+
+        # Get the user's linked phone numbers (if filtering by user)
+        user_phones: Optional[Set[str]] = None
+        if user_email:
+            user_phones = await _get_user_phones(user_email)
+            # If user has no linked phones, return empty list
+            if not user_phones:
+                return []
         
         conversations = []
         
@@ -72,11 +95,16 @@ async def list_conversations(
             # Filter by status if provided
             if status and conv_data.get('status') != status:
                 continue
+
+            # Filter by user's linked phones
+            phone = conv_data.get('phone_number', 'unknown')
+            if user_phones is not None and phone not in user_phones:
+                continue
             
             # Parse conversation data
             conversation = Conversation(
                 id=conv_data.get('id', key.split(':')[1]),
-                phone_number=conv_data.get('phone_number', 'unknown'),
+                phone_number=phone,
                 started_at=conv_data.get('started_at', datetime.utcnow().isoformat()),
                 last_message_at=conv_data.get('last_message_at', datetime.utcnow().isoformat()),
                 message_count=int(conv_data.get('message_count', 0)),
@@ -99,6 +127,11 @@ async def list_conversations(
                 messages = state.get('messages', [])
                 
                 if not messages:
+                    continue
+
+                # Filter by user's linked phones
+                phone = state.get('phone_number', 'unknown')
+                if user_phones is not None and phone not in user_phones:
                     continue
                 
                 session_id = key.split(':')[-1]
