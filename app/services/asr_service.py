@@ -223,29 +223,33 @@ class DeepgramASRService:
         try:
             client = self._get_client()
             
-            # Transcribe using REST API
-            response = await client.listen.rest.v("1").transcribe_file(
+            # Transcribe using prerecorded API (for file/buffer transcription)
+            # Deepgram SDK v3+ uses asyncprerecorded for async file transcription
+            options = {
+                "model": "nova-2",
+                "language": language,
+                "smart_format": True,
+                "punctuate": True,
+            }
+            
+            response = await client.listen.asyncprerecorded.v("1").transcribe_file(
                 {"buffer": audio_data},
-                {
-                    "model": "nova-2",
-                    "language": language,
-                    "smart_format": True,
-                    "punctuate": True,
-                }
+                options
             )
             
-            # Extract transcript
-            if response and response.results:
+            # Extract transcript from response
+            if response and hasattr(response, 'results') and response.results:
                 channels = response.results.channels
-                if channels and channels[0].alternatives:
+                if channels and len(channels) > 0 and channels[0].alternatives:
                     transcript = channels[0].alternatives[0].transcript
                     logger.info(
                         "Transcribed audio",
                         length=len(audio_data),
                         transcript_length=len(transcript) if transcript else 0,
                     )
-                    return transcript
+                    return transcript.strip() if transcript else None
             
+            logger.warning("No transcript returned from Deepgram")
             return None
             
         except Exception as e:
