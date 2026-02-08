@@ -21,11 +21,11 @@ router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 class KnowledgeEntry(BaseModel):
     """FAQ/Knowledge entry model."""
-    id: str
-    category: str
+    id: Optional[str] = None
+    category: str = "General"
     question: str
     answer: str
-    keywords: List[str]
+    keywords: List[str] = []
     metadata: Optional[dict] = None
 
 
@@ -57,22 +57,29 @@ async def get_knowledge_base():
     try:
         knowledge_service = get_knowledge_service()
         
-        # Get business info
-        business_info_dict = knowledge_service.business_info
-        business_info = BusinessInfo(**business_info_dict)
+        # Get business info using the proper method
+        business_info_dict = knowledge_service.get_business_info() or {}
+        # Provide defaults for required fields
+        business_info = BusinessInfo(
+            name=business_info_dict.get('name', 'My Business'),
+            tagline=business_info_dict.get('tagline'),
+            tone=business_info_dict.get('tone'),
+            timezone=business_info_dict.get('timezone'),
+            operating_hours=business_info_dict.get('operating_hours'),
+            contact=business_info_dict.get('contact'),
+        )
         
-        # Get all FAQs
-        all_faqs = knowledge_service.faqs
+        # Get all FAQs from internal entries dict
         faqs = [
             KnowledgeEntry(
-                id=faq.get('id', str(idx)),
-                category=faq.get('category', 'General'),
-                question=faq.get('question', ''),
-                answer=faq.get('answer', ''),
-                keywords=faq.get('keywords', []),
-                metadata=faq.get('metadata', {})
+                id=entry.id,
+                category=entry.category,
+                question=entry.question,
+                answer=entry.answer,
+                keywords=entry.keywords,
+                metadata=entry.metadata,
             )
-            for idx, faq in enumerate(all_faqs)
+            for entry in knowledge_service._entries.values()
         ]
         
         return KnowledgeBase(
@@ -100,17 +107,17 @@ async def search_knowledge(
     try:
         knowledge_service = get_knowledge_service()
         
-        # Use knowledge service search
-        results = knowledge_service.search(q, top_k=10)
+        # Use knowledge service keyword search
+        results = knowledge_service.search_by_keywords(q, limit=10)
         
         return [
             KnowledgeEntry(
-                id=result.get('id', ''),
-                category=result.get('category', 'General'),
-                question=result.get('question', ''),
-                answer=result.get('answer', ''),
-                keywords=result.get('keywords', []),
-                metadata=result.get('metadata', {})
+                id=result.entry.id,
+                category=result.entry.category,
+                question=result.entry.question,
+                answer=result.entry.answer,
+                keywords=result.entry.keywords,
+                metadata=result.entry.metadata,
             )
             for result in results
         ]
@@ -154,7 +161,7 @@ async def add_knowledge_entry(entry: KnowledgeEntry):
             json.dump(kb_data, f, indent=2)
         
         # Reload knowledge service
-        knowledge_service._load_knowledge_base()
+        knowledge_service.load_knowledge_base()
         
         logger.info(f"Added knowledge entry: {new_entry['id']}")
         return KnowledgeEntry(**new_entry)
@@ -201,7 +208,7 @@ async def update_knowledge_entry(entry_id: str, entry: KnowledgeEntry):
             json.dump(kb_data, f, indent=2)
         
         # Reload knowledge service
-        knowledge_service._load_knowledge_base()
+        knowledge_service.load_knowledge_base()
         
         logger.info(f"Updated knowledge entry: {entry_id}")
         return entry
@@ -245,7 +252,7 @@ async def delete_knowledge_entry(entry_id: str):
             json.dump(kb_data, f, indent=2)
         
         # Reload knowledge service
-        knowledge_service._load_knowledge_base()
+        knowledge_service.load_knowledge_base()
         
         logger.info(f"Deleted knowledge entry: {entry_id}")
         return {"status": "success", "message": f"Entry {entry_id} deleted"}

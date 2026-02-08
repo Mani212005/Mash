@@ -224,7 +224,7 @@ class DeepgramASRService:
             client = self._get_client()
             
             # Transcribe using prerecorded API (for file/buffer transcription)
-            # Deepgram SDK v3+ uses asyncprerecorded for async file transcription
+            # Deepgram SDK v3+ uses prerecorded for async file transcription
             options = {
                 "model": "nova-2",
                 "language": language,
@@ -232,7 +232,7 @@ class DeepgramASRService:
                 "punctuate": True,
             }
             
-            response = await client.listen.asyncprerecorded.v("1").transcribe_file(
+            response = await client.listen.prerecorded.v("1").transcribe_file(
                 {"buffer": audio_data},
                 options
             )
