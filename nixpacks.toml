@@ -1,15 +1,8 @@
-# Force Railway/Nixpacks to treat this as a Python project
-# (frontend/package.json causes false Node.js detection)
-
+# Force Python provider (frontend/package.json causes Node.js false detection)
 providers = ["python"]
 
-[phases.setup]
-nixPkgs = ["python311Full", "gcc"]
-aptPkgs = ["libpq-dev"]
-cmds = ["python3.11 -m ensurepip --upgrade"]
-
-[phases.install]
-cmds = ["python3.11 -m pip install --upgrade pip", "python3.11 -m pip install -r requirements.txt"]
+[variables]
+NIXPACKS_PYTHON_VERSION = "3.11"
 
 [start]
-cmd = "python3.11 -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"
+cmd = "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"
