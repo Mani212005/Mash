@@ -11,7 +11,7 @@ import {
   HealthStatus,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://web-production-a33e4.up.railway.app/api/v1';
 
 class APIError extends Error {
   constructor(public status: number, message: string) {
