@@ -1,15 +1,15 @@
-# Mash Voice Frontend
+# Mash Frontend
 
 Next.js 14 dashboard for the Mash Voice AI Customer Service Platform.
 
 ## Features
 
-- 📊 **Dashboard** - Real-time stats and activity overview
-- 💬 **Conversations** - View and manage WhatsApp conversations
-- 🤖 **Agents** - Manage AI agents and their capabilities
-- 📚 **Knowledge Base** - FAQs and business information management
-- 🎫 **Tickets** - Support ticket management
-- ⚙️ **Settings** - Configure API keys and platform settings
+-  **Dashboard** - Real-time stats and activity overview
+-  **Conversations** - View and manage WhatsApp conversations
+-  **Agents** - Manage AI agents and their capabilities
+-  **Knowledge Base** - FAQs and business information management
+-  **Tickets** - Support ticket management
+-  **Settings** - Configure API keys and platform settings
 
 ## Tech Stack
 

@@ -1,15 +1,15 @@
-# Mash Voice - Modular Full-Stack Voice Agent Platform
+# Mash - Modular Full-Stack Voice Agent Platform
 
 A **clean, modular, WhatsApp-first messaging agent stack** that prioritizes reliability, debuggability, and multi-agent workflows — built for real conversations, not demos.
 
 ## Features
 
-- 💬 **WhatsApp Integration**: Direct integration with Meta WhatsApp Business API
-- 🎤 **Voice Message Support**: Transcription of voice messages using Deepgram ASR
-- 🔊 **Text-to-Speech**: Low-latency TTS via Deepgram (for audio responses)
-- 🤖 **Multi-Agent System**: Primary, specialist, and handoff agents with context-aware routing
-- 🔧 **Function Calling**: JSON-schema based tools with workflow engine
-- 📊 **Observability**: Per-conversation tracing, timeline view, and debug console
+-  **WhatsApp Integration**: Direct integration with Meta WhatsApp Business API
+-  **Voice Message Support**: Transcription of voice messages using Deepgram ASR
+-  **Text-to-Speech**: Low-latency TTS via Deepgram (for audio responses)
+-  **Multi-Agent System**: Primary, specialist, and handoff agents with context-aware routing
+-  **Function Calling**: JSON-schema based tools with workflow engine
+-  **Observability**: Per-conversation tracing, timeline view, and debug console
 
 ## Architecture
 
