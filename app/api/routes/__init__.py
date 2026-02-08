@@ -10,6 +10,7 @@ from app.api.routes.knowledge import router as knowledge_router
 from app.api.routes.tickets import router as tickets_router
 from app.api.routes.websocket import router as websocket_router
 from app.api.routes.whatsapp import router as whatsapp_router
+from app.api.routes.seed import router as seed_router
 
 __all__ = [
     "agents_router",
@@ -20,4 +21,5 @@ __all__ = [
     "tickets_router",
     "websocket_router",
     "whatsapp_router",
+    "seed_router",
 ]

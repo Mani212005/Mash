@@ -21,6 +21,7 @@ export default function ConversationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
+  const [isSeeding, setIsSeeding] = useState(false);
 
   useEffect(() => {
     async function loadConversations() {
@@ -38,6 +39,39 @@ export default function ConversationsPage() {
 
     loadConversations();
   }, [statusFilter]);
+
+  const handleSeedData = async () => {
+    try {
+      setIsSeeding(true);
+      await api.seedConversations(10);
+      // Reload conversations
+      const status = statusFilter === 'all' ? undefined : statusFilter;
+      const data = await api.getConversations(status);
+      setConversations(data);
+    } catch (err) {
+      console.error('Failed to seed conversations:', err);
+      alert('Failed to create demo data');
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
+  const handleClearDemo = async () => {
+    if (!confirm('Clear all demo conversations?')) return;
+    try {
+      setIsSeeding(true);
+      await api.clearDemoConversations();
+      // Reload conversations
+      const status = statusFilter === 'all' ? undefined : statusFilter;
+      const data = await api.getConversations(status);
+      setConversations(data);
+    } catch (err) {
+      console.error('Failed to clear demo data:', err);
+      alert('Failed to clear demo data');
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   const filteredConversations = conversations.filter((conv) => {
     if (!searchQuery) return true;
@@ -63,6 +97,30 @@ export default function ConversationsPage() {
           <p className="text-muted-foreground mt-1">
             View and manage WhatsApp conversations
           </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleClearDemo}
+            disabled={isSeeding || conversations.length === 0}
+            className={cn(
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              'bg-red-600 text-white hover:bg-red-700',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            Clear Demo
+          </button>
+          <button
+            onClick={handleSeedData}
+            disabled={isSeeding}
+            className={cn(
+              'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+              'bg-primary text-primary-foreground hover:bg-primary/90',
+              'disabled:opacity-50 disabled:cursor-not-allowed'
+            )}
+          >
+            {isSeeding ? 'Loading...' : 'Add Demo Data'}
+          </button>
         </div>
       </div>
 

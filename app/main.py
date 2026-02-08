@@ -19,6 +19,7 @@ from app.api import (
     tickets_router,
     websocket_router,
     whatsapp_router,
+    seed_router,
 )
 from app.config import get_settings
 from app.models import HealthCheck, init_database
@@ -138,7 +139,6 @@ async def root():
         "health": "/health",
     }
 
-
 # Include routers
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
@@ -147,6 +147,8 @@ app.include_router(tickets_router, prefix="/api/v1")
 app.include_router(whatsapp_router, prefix="/api/v1")
 app.include_router(calls_router, prefix="/api/v1")
 app.include_router(agents_router, prefix="/api/v1")
+app.include_router(websocket_router, prefix="/api/v1")
+app.include_router(seed_router, prefix="/api/v1")
 app.include_router(websocket_router, prefix="/api/v1")
 
 

@@ -186,6 +186,19 @@ export function createWebSocket(
   return ws;
 }
 
+// Seed Data
+export async function seedConversations(count: number = 10): Promise<{ success: boolean; message: string; created_count: number }> {
+  return fetchAPI(`/seed/conversations?count=${count}`, {
+    method: 'POST',
+  });
+}
+
+export async function clearDemoConversations(): Promise<{ success: boolean; message: string; created_count: number }> {
+  return fetchAPI('/seed/conversations', {
+    method: 'DELETE',
+  });
+}
+
 // Export API object for convenient access
 export const api = {
   getHealth,
@@ -204,6 +217,8 @@ export const api = {
   getTicket,
   updateTicketStatus,
   createWebSocket,
+  seedConversations,
+  clearDemoConversations,
 };
 
 export default api;

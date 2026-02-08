@@ -55,35 +55,79 @@ async def list_conversations(
     """
     try:
         state_manager = get_state_manager()
+        redis = await state_manager._get_redis()
         
-        # Get all conversation keys from Redis
-        conv_keys = await state_manager.redis.keys("conversation:*")
         conversations = []
         
-        for key in conv_keys:
-            conv_data = await state_manager.redis.hgetall(key)
+        # Get demo conversations (pattern: conversation:demo_*)
+        async for key in redis.scan_iter("conversation:demo_*"):
+            # Skip message keys
+            if ":messages" in key:
+                continue
+                
+            conv_data = await redis.hgetall(key)
             if not conv_data:
                 continue
             
-            # Decode bytes to strings
-            conv_dict = {k.decode(): v.decode() for k, v in conv_data.items()}
-            
             # Filter by status if provided
-            if status and conv_dict.get('status') != status:
+            if status and conv_data.get('status') != status:
                 continue
             
             # Parse conversation data
             conversation = Conversation(
-                id=conv_dict.get('id', key.decode().split(':')[1]),
-                phone_number=conv_dict.get('phone_number', 'unknown'),
-                started_at=conv_dict.get('started_at', datetime.utcnow().isoformat()),
-                last_message_at=conv_dict.get('last_message_at', datetime.utcnow().isoformat()),
-                message_count=int(conv_dict.get('message_count', 0)),
-                status=conv_dict.get('status', 'active'),
-                current_agent=conv_dict.get('current_agent', 'customer_service_agent'),
+                id=conv_data.get('id', key.split(':')[1]),
+                phone_number=conv_data.get('phone_number', 'unknown'),
+                started_at=conv_data.get('started_at', datetime.utcnow().isoformat()),
+                last_message_at=conv_data.get('last_message_at', datetime.utcnow().isoformat()),
+                message_count=int(conv_data.get('message_count', 0)),
+                status=conv_data.get('status', 'active'),
+                current_agent=conv_data.get('current_agent', 'customer_service_agent'),
                 metadata={}
             )
             conversations.append(conversation)
+        
+        # Also get real WhatsApp conversations (pattern: call:context:*)
+        async for key in redis.scan_iter("call:context:*"):
+            try:
+                context_data = await redis.get(key)
+                if not context_data:
+                    continue
+                
+                import json
+                context = json.loads(context_data)
+                
+                # Extract conversation info
+                call_sid = key.split(':')[-1]
+                conv_history = context.get('conversation_history', [])
+                
+                if not conv_history:
+                    continue
+                
+                # Determine status
+                conv_status = 'active'
+                if context.get('metadata', {}).get('ended'):
+                    conv_status = 'ended'
+                elif 'handoff' in context.get('current_agent_id', ''):
+                    conv_status = 'escalated'
+                
+                # Filter by status if provided
+                if status and conv_status != status:
+                    continue
+                
+                conversation = Conversation(
+                    id=call_sid,
+                    phone_number=context.get('metadata', {}).get('phone_number', 'unknown'),
+                    started_at=conv_history[0].get('timestamp', datetime.utcnow().isoformat()) if conv_history else datetime.utcnow().isoformat(),
+                    last_message_at=conv_history[-1].get('timestamp', datetime.utcnow().isoformat()) if conv_history else datetime.utcnow().isoformat(),
+                    message_count=len(conv_history),
+                    status=conv_status,
+                    current_agent=context.get('current_agent_id', 'customer_service_agent'),
+                    metadata=context.get('metadata', {})
+                )
+                conversations.append(conversation)
+            except Exception as e:
+                logger.warning(f"Error parsing context {key}: {e}")
+                continue
         
         # Sort by last message time (most recent first)
         conversations.sort(key=lambda x: x.last_message_at, reverse=True)
@@ -105,16 +149,36 @@ async def get_conversation(conversation_id: str):
     """
     try:
         state_manager = get_state_manager()
+        redis = await state_manager._get_redis()
         
-        # Get conversation data from Redis
+        # Try demo conversation first
         conv_key = f"conversation:{conversation_id}"
-        conv_data = await state_manager.redis.hgetall(conv_key)
+        conv_data = await redis.hgetall(conv_key)
         
         if not conv_data:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        
-        # Decode bytes to strings
-        conv_dict = {k.decode(): v.decode() for k, v in conv_data.items()}
+            # Try WhatsApp conversation (call:context:*)
+            context_key = f"call:context:{conversation_id}"
+            context_data = await redis.get(context_key)
+            
+            if not context_data:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            
+            # Parse context and convert to conversation format
+            import json
+            context = json.loads(context_data)
+            conv_history = context.get('conversation_history', [])
+            
+            conv_dict = {
+                'id': conversation_id,
+                'phone_number': context.get('metadata', {}).get('phone_number', 'unknown'),
+                'started_at': conv_history[0].get('timestamp', datetime.utcnow().isoformat()) if conv_history else datetime.utcnow().isoformat(),
+                'last_message_at': conv_history[-1].get('timestamp', datetime.utcnow().isoformat()) if conv_history else datetime.utcnow().isoformat(),
+                'message_count': str(len(conv_history)),
+                'status': 'active',
+                'current_agent': context.get('current_agent_id', 'customer_service_agent'),
+            }
+        else:
+            conv_dict = conv_data
         
         return Conversation(
             id=conversation_id,
@@ -146,24 +210,21 @@ async def get_conversation_messages(conversation_id: str):
     """
     try:
         state_manager = get_state_manager()
-        
-        # Get messages from Redis list
-        messages_key = f"messages:{conversation_id}"
-        message_count = await state_manager.redis.llen(messages_key)
-        
-        if message_count == 0:
-            return []
-        
-        # Get all messages
-        raw_messages = await state_manager.redis.lrange(messages_key, 0, -1)
+        redis = await state_manager._get_redis()
         messages = []
         
         import json
-        for idx, raw_msg in enumerate(raw_messages):
-            try:
-                msg_data = json.loads(raw_msg.decode())
+        
+        # Try demo conversation messages
+        messages_key = f"conversation:{conversation_id}:messages"
+        messages_data = await redis.get(messages_key)
+        
+        if messages_data:
+            # Demo conversation format (stored as JSON)
+            message_list = json.loads(messages_data)
+            for msg_data in message_list:
                 message = Message(
-                    id=msg_data.get('id', f"msg_{idx}"),
+                    id=msg_data.get('id', f"msg_{conversation_id}_{len(messages)}"),
                     conversation_id=conversation_id,
                     role=msg_data.get('role', 'user'),
                     content=msg_data.get('content', ''),
@@ -173,9 +234,27 @@ async def get_conversation_messages(conversation_id: str):
                     tool_calls=msg_data.get('tool_calls'),
                 )
                 messages.append(message)
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse message: {raw_msg}")
-                continue
+        else:
+            # Try WhatsApp conversation (from call context)
+            context_key = f"call:context:{conversation_id}"
+            context_data = await redis.get(context_key)
+            
+            if context_data:
+                context = json.loads(context_data)
+                conv_history = context.get('conversation_history', [])
+                
+                for idx, turn in enumerate(conv_history):
+                    message = Message(
+                        id=f"msg_{conversation_id}_{idx}",
+                        conversation_id=conversation_id,
+                        role=turn.get('role', 'user'),
+                        content=turn.get('content', ''),
+                        timestamp=turn.get('timestamp', datetime.utcnow().isoformat()),
+                        message_type='text',
+                        agent=turn.get('metadata', {}).get('agent'),
+                        tool_calls=None,
+                    )
+                    messages.append(message)
         
         return messages
         
