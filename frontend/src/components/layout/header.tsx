@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bell, Search, Moon, Sun, User } from 'lucide-react';
+import { Bell, Search, Moon, Sun, User, LogOut } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 
 export function Header() {
   const [isDark, setIsDark] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const { data: session } = useSession();
 
   useEffect(() => {
     // Check system preference on mount
@@ -81,16 +84,47 @@ export function Header() {
         </button>
 
         {/* User Menu */}
-        <button
-          className={cn(
-            'flex items-center gap-2 p-2 rounded-lg transition-colors',
-            'text-muted-foreground hover:text-foreground hover:bg-accent'
+        <div className="relative">
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className={cn(
+              'flex items-center gap-2 p-1.5 rounded-lg transition-colors',
+              'text-muted-foreground hover:text-foreground hover:bg-accent'
+            )}
+          >
+            {session?.user?.image ? (
+              <img
+                src={session.user.image}
+                alt={session.user.name || 'User'}
+                className="w-8 h-8 rounded-full"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="w-4 h-4 text-primary" />
+              </div>
+            )}
+            <span className="text-sm font-medium text-foreground hidden md:block">
+              {session?.user?.name || 'User'}
+            </span>
+          </button>
+
+          {/* Dropdown */}
+          {showUserMenu && (
+            <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50">
+              <div className="p-3 border-b border-border">
+                <p className="text-sm font-medium text-foreground">{session?.user?.name}</p>
+                <p className="text-xs text-muted-foreground">{session?.user?.email}</p>
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="w-full flex items-center gap-2 p-3 text-sm text-red-500 hover:bg-accent transition-colors rounded-b-lg"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </button>
+            </div>
           )}
-        >
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <User className="w-4 h-4 text-primary" />
-          </div>
-        </button>
+        </div>
       </div>
     </header>
   );

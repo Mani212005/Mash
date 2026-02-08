@@ -14,5 +14,6 @@ export const config = {
     '/agents/:path*',
     '/knowledge/:path*',
     '/tickets/:path*',
+    '/settings/:path*',
   ],
 }
