@@ -1,11 +1,13 @@
-# Tell Railway/Nixpacks this is a Python project
-# (needed because frontend/package.json makes it detect Node.js)
+# Force Railway/Nixpacks to treat this as a Python project
+# (frontend/package.json causes false Node.js detection)
+
+providers = ["python"]
 
 [phases.setup]
-nixPkgs = ["python311"]
+nixPkgs = ["python311", "python311Packages.pip"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = ["python3.11 -m pip install -r requirements.txt"]
 
 [start]
-cmd = "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"
+cmd = "python3.11 -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"
