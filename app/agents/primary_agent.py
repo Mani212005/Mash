@@ -12,7 +12,7 @@ from app.models.schemas import CallContext
 class PrimaryAgent(BaseAgent):
     """
     Primary conversational agent.
-    
+
     This is the default agent that answers calls and handles
     general conversation. It can route to specialist agents
     based on detected intent.
@@ -21,7 +21,7 @@ class PrimaryAgent(BaseAgent):
     name = "primary_agent"
     description = "Main conversational agent for general inquiries"
     agent_type = "primary"
-    
+
     system_prompt = """You are a friendly and helpful voice assistant for a business.
 
 Your role is to:
@@ -49,7 +49,7 @@ Always confirm understanding before transferring."""
         "check_business_hours",
         "get_company_info",
     ]
-    
+
     transfer_rules = {
         "booking": "scheduler_agent",
         "appointment": "scheduler_agent",
@@ -61,10 +61,7 @@ Always confirm understanding before transferring."""
 
     async def get_greeting(self, context: CallContext) -> str:
         """Get initial greeting."""
-        return (
-            "Hello! Thank you for calling. "
-            "How can I help you today?"
-        )
+        return "Hello! Thank you for calling. " "How can I help you today?"
 
     async def get_farewell(self, context: CallContext) -> str:
         """Get farewell message."""
@@ -76,10 +73,10 @@ Always confirm understanding before transferring."""
         target = await super().should_transfer(context)
         if target:
             return target
-        
+
         # Additional logic could be added here
         # For example, sentiment-based escalation
         if context.sentiment == "frustrated" or context.sentiment == "angry":
             return "human_handoff_agent"
-        
+
         return None

@@ -5,11 +5,10 @@ Handles step-based execution, conditional branching, and retry logic.
 """
 
 import asyncio
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
 
 from app.utils.logging import get_logger
 
@@ -18,6 +17,7 @@ logger = get_logger(__name__)
 
 class StepStatus(str, Enum):
     """Status of a workflow step."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -28,6 +28,7 @@ class StepStatus(str, Enum):
 @dataclass
 class StepResult:
     """Result of executing a workflow step."""
+
     status: StepStatus
     data: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
@@ -37,6 +38,7 @@ class StepResult:
 @dataclass
 class WorkflowStep:
     """Definition of a workflow step."""
+
     name: str
     handler: Callable[..., Awaitable[StepResult]]
     condition: Callable[[dict[str, Any]], bool] | None = None
@@ -49,6 +51,7 @@ class WorkflowStep:
 @dataclass
 class WorkflowExecution:
     """Tracks the execution state of a workflow."""
+
     workflow_name: str
     call_sid: str
     current_step: int = 0
@@ -62,7 +65,7 @@ class WorkflowExecution:
 class Workflow:
     """
     A workflow is a sequence of steps that are executed in order.
-    
+
     Each step can have:
     - A condition (to skip if not met)
     - Retry logic
@@ -110,7 +113,7 @@ class Workflow:
             context=initial_context or {},
         )
         execution.status = StepStatus.RUNNING
-        
+
         logger.info(
             "Starting workflow",
             workflow=self.name,
@@ -121,7 +124,7 @@ class Workflow:
         try:
             while execution.current_step < len(self.steps):
                 step = self.steps[execution.current_step]
-                
+
                 # Check condition
                 if step.condition and not step.condition(execution.context):
                     logger.debug(
@@ -129,16 +132,14 @@ class Workflow:
                         workflow=self.name,
                         step=step.name,
                     )
-                    execution.step_results[step.name] = StepResult(
-                        status=StepStatus.SKIPPED
-                    )
+                    execution.step_results[step.name] = StepResult(status=StepStatus.SKIPPED)
                     execution.current_step += 1
                     continue
-                
+
                 # Execute step with retries
                 result = await self._execute_step(step, execution)
                 execution.step_results[step.name] = result
-                
+
                 # Handle failure
                 if result.status == StepStatus.FAILED:
                     if step.on_failure and step.on_failure in self._step_map:
@@ -155,14 +156,14 @@ class Workflow:
                         # No failure handler, abort workflow
                         execution.status = StepStatus.FAILED
                         break
-                
+
                 # Update context with step result data
                 execution.context.update(result.data)
                 execution.current_step += 1
-            
+
             if execution.status != StepStatus.FAILED:
                 execution.status = StepStatus.COMPLETED
-            
+
         except Exception as e:
             logger.exception(
                 "Workflow execution failed",
@@ -171,9 +172,9 @@ class Workflow:
                 error=str(e),
             )
             execution.status = StepStatus.FAILED
-        
+
         execution.completed_at = datetime.utcnow()
-        
+
         logger.info(
             "Workflow completed",
             workflow=self.name,
@@ -181,7 +182,7 @@ class Workflow:
             status=execution.status.value,
             duration_ms=(execution.completed_at - execution.started_at).total_seconds() * 1000,
         )
-        
+
         return execution
 
     async def _execute_step(
@@ -193,11 +194,11 @@ class Workflow:
         attempts = 0
         max_attempts = step.retry_count + 1
         last_error = None
-        
+
         while attempts < max_attempts:
             attempts += 1
             start_time = datetime.utcnow()
-            
+
             try:
                 logger.debug(
                     "Executing step",
@@ -205,16 +206,16 @@ class Workflow:
                     step=step.name,
                     attempt=attempts,
                 )
-                
+
                 # Execute with timeout
                 result = await asyncio.wait_for(
                     step.handler(execution.context, execution.call_sid),
                     timeout=step.timeout_seconds,
                 )
-                
+
                 duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
                 result.duration_ms = duration_ms
-                
+
                 if result.status == StepStatus.COMPLETED:
                     logger.info(
                         "Step completed",
@@ -223,9 +224,9 @@ class Workflow:
                         duration_ms=duration_ms,
                     )
                     return result
-                
+
                 last_error = result.error
-                
+
             except asyncio.TimeoutError:
                 last_error = f"Step timed out after {step.timeout_seconds}s"
                 logger.warning(
@@ -243,11 +244,11 @@ class Workflow:
                     error=str(e),
                     attempt=attempts,
                 )
-            
+
             # Retry delay
             if attempts < max_attempts:
                 await asyncio.sleep(step.retry_delay_ms / 1000)
-        
+
         return StepResult(
             status=StepStatus.FAILED,
             error=last_error or "Unknown error",
@@ -288,11 +289,12 @@ def get_workflow_registry() -> WorkflowRegistry:
 
 # ============ Common Workflow Steps ============
 
+
 async def identify_intent_step(context: dict[str, Any], call_sid: str) -> StepResult:
     """Step to identify user intent from transcript."""
     # This would typically call an LLM to identify intent
     transcript = context.get("last_transcript", "")
-    
+
     # Placeholder - in real implementation, use LLM
     intent = "unknown"
     if any(word in transcript.lower() for word in ["book", "schedule", "appointment"]):
@@ -301,7 +303,7 @@ async def identify_intent_step(context: dict[str, Any], call_sid: str) -> StepRe
         intent = "support"
     elif any(word in transcript.lower() for word in ["cancel", "stop"]):
         intent = "cancellation"
-    
+
     return StepResult(
         status=StepStatus.COMPLETED,
         data={"intent": intent},
@@ -312,16 +314,16 @@ async def validate_slots_step(context: dict[str, Any], call_sid: str) -> StepRes
     """Step to validate collected slots."""
     required_slots = context.get("required_slots", [])
     collected_slots = context.get("collected_slots", {})
-    
+
     missing_slots = [s for s in required_slots if s not in collected_slots]
-    
+
     if missing_slots:
         return StepResult(
             status=StepStatus.FAILED,
             error=f"Missing slots: {missing_slots}",
             data={"missing_slots": missing_slots},
         )
-    
+
     return StepResult(
         status=StepStatus.COMPLETED,
         data={"validation": "passed"},
@@ -332,17 +334,17 @@ async def validate_slots_step(context: dict[str, Any], call_sid: str) -> StepRes
 def create_booking_workflow() -> Workflow:
     """Create a booking workflow."""
     workflow = Workflow("booking")
-    
+
     workflow.add_step(
         name="identify_intent",
         handler=identify_intent_step,
     )
-    
+
     workflow.add_step(
         name="validate_slots",
         handler=validate_slots_step,
         condition=lambda ctx: ctx.get("intent") == "booking",
         retry_count=2,
     )
-    
+
     return workflow

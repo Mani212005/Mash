@@ -8,10 +8,9 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from app.core.events import EventStore
-from app.core.state import get_state_manager
 from app.models import (
     Call,
     CallCreate,
@@ -41,15 +40,15 @@ async def list_calls(
     """
     List calls with pagination.
     """
-    event_store = EventStore(db)
-    
+    EventStore(db)
+
     # Get total count
     count_stmt = select(func.count(Call.id))
     if status:
         count_stmt = count_stmt.where(Call.status == status.value)
     result = await db.execute(count_stmt)
     total = result.scalar() or 0
-    
+
     # Get calls
     offset = (page - 1) * page_size
     stmt = select(Call).order_by(Call.started_at.desc()).offset(offset).limit(page_size)
@@ -57,7 +56,7 @@ async def list_calls(
         stmt = stmt.where(Call.status == status.value)
     result = await db.execute(stmt)
     calls = result.scalars().all()
-    
+
     return CallList(
         calls=[CallResponse.model_validate(c) for c in calls],
         total=total,
@@ -83,10 +82,10 @@ async def get_call(call_id: UUID, db=Depends(get_db_session)):
     """
     event_store = EventStore(db)
     call = await event_store.get_call_by_id(call_id)
-    
+
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     return CallResponse.model_validate(call)
 
 
@@ -100,19 +99,20 @@ async def create_outbound_call(
     Initiate an outbound call.
     """
     call_manager = get_call_manager()
-    
+
     # Get base URL for webhooks
     base_url = str(request.base_url).rstrip("/")
-    
+
     try:
         # Initiate call via Twilio
         call_sid = await call_manager.initiate_outbound_call(call_data, base_url)
-        
+
         # Create call record
         event_store = EventStore(db)
         from app.config import get_settings
+
         settings = get_settings()
-        
+
         call = await event_store.create_call(
             twilio_call_sid=call_sid,
             direction="outbound",
@@ -122,9 +122,9 @@ async def create_outbound_call(
             metadata=call_data.metadata,
         )
         await db.commit()
-        
+
         return CallResponse.model_validate(call)
-        
+
     except Exception as e:
         logger.exception("Failed to create outbound call", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to initiate call: {str(e)}")
@@ -137,23 +137,23 @@ async def end_call(call_id: UUID, db=Depends(get_db_session)):
     """
     event_store = EventStore(db)
     call = await event_store.get_call_by_id(call_id)
-    
+
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     if call.status not in ("initiated", "ringing", "in-progress"):
         raise HTTPException(status_code=400, detail="Call is not active")
-    
+
     try:
         call_manager = get_call_manager()
         call_manager.end_call(call.twilio_call_sid)
-        
+
         # Update status
         await event_store.update_call_status(call_id, CallStatus.COMPLETED)
         await db.commit()
-        
+
         return {"status": "ended", "call_id": str(call_id)}
-        
+
     except Exception as e:
         logger.exception("Failed to end call", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to end call: {str(e)}")
@@ -165,18 +165,18 @@ async def get_call_timeline(call_id: UUID, db=Depends(get_db_session)):
     Get event timeline for a call.
     """
     event_store = EventStore(db)
-    
+
     call = await event_store.get_call_by_id(call_id)
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     events = await event_store.get_call_timeline(call_id)
-    
+
     # Calculate duration
     duration_ms = None
     if call.duration_seconds:
         duration_ms = call.duration_seconds * 1000
-    
+
     return CallTimeline(
         call_id=call_id,
         events=[CallEventResponse.model_validate(e) for e in events],
@@ -190,13 +190,13 @@ async def get_call_transcript(call_id: UUID, db=Depends(get_db_session)):
     Get full transcript for a call.
     """
     event_store = EventStore(db)
-    
+
     call = await event_store.get_call_by_id(call_id)
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     transcripts = await event_store.get_call_transcripts(call_id)
-    
+
     segments = [
         TranscriptSegment(
             speaker=t.speaker,
@@ -209,7 +209,7 @@ async def get_call_transcript(call_id: UUID, db=Depends(get_db_session)):
         )
         for t in transcripts
     ]
-    
+
     return CallTranscript(call_id=call_id, segments=segments)
 
 
@@ -224,25 +224,25 @@ async def transfer_call(
     Transfer a call to a different agent.
     """
     event_store = EventStore(db)
-    
+
     call = await event_store.get_call_by_id(call_id)
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
-    
+
     if call.status != "in-progress":
         raise HTTPException(status_code=400, detail="Call is not active")
-    
+
     orchestrator = get_orchestrator()
     response = await orchestrator.transfer_agent(
         call_sid=call.twilio_call_sid,
         target_agent=target_agent,
         reason=reason,
     )
-    
+
     # Update call record
     await event_store.update_call_agent(call_id, target_agent)
     await db.commit()
-    
+
     return {
         "status": "transferred",
         "from_agent": call.current_agent_id,

@@ -5,9 +5,8 @@ Mash Voice - Tool Tests
 import pytest
 
 from app.tools import (
-    BaseTool,
-    CheckAvailabilityTool,
     BookAppointmentTool,
+    CheckAvailabilityTool,
     GetBusinessHoursTool,
     get_tool_registry,
     register_all_tools,
@@ -108,10 +107,10 @@ class TestToolRegistry:
     def test_register_and_get(self):
         """Test registering and retrieving tools."""
         registry = get_tool_registry()
-        
+
         # Register all tools
         register_all_tools()
-        
+
         # Check tools are registered
         assert registry.get("check_availability") is not None
         assert registry.get("book_appointment") is not None
@@ -121,7 +120,7 @@ class TestToolRegistry:
         """Test listing registered tools."""
         registry = get_tool_registry()
         register_all_tools()
-        
+
         tools = registry.list_tools()
         assert len(tools) > 0
         assert "check_availability" in tools
@@ -130,7 +129,7 @@ class TestToolRegistry:
         """Test getting tool definitions."""
         registry = get_tool_registry()
         register_all_tools()
-        
+
         definitions = registry.get_definitions(["check_availability", "book_appointment"])
         assert len(definitions) == 2
         assert all("name" in d and "description" in d for d in definitions)

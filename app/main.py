@@ -16,11 +16,11 @@ from app.api import (
     conversations_router,
     dashboard_router,
     knowledge_router,
+    seed_router,
     tickets_router,
     users_router,
     websocket_router,
     whatsapp_router,
-    seed_router,
 )
 from app.config import get_settings
 from app.models import HealthCheck, init_database
@@ -36,30 +36,29 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Starting Mash Voice Platform")
-    
+
     # Initialize database
     try:
         await init_database()
         logger.info("Database initialized")
     except Exception as e:
         logger.warning(f"Database initialization skipped: {e}")
-    
+
     # Register tools
     register_all_tools()
     logger.info("Tools registered")
-    
+
     yield
-    
+
     # Cleanup
     logger.info("Shutting down Mash Voice Platform")
-    
+
     # Close services
-    from app.services import get_asr_service, get_tts_service, get_conversation_manager
-    
+    from app.services import get_asr_service, get_tts_service
+
     try:
         await get_asr_service().close_all()
         await get_tts_service().close()
-        await get_conversation_manager().close()
     except Exception as e:
         logger.warning(f"Error during cleanup: {e}")
 
@@ -102,26 +101,28 @@ async def health_check():
     services = {
         "api": "healthy",
     }
-    
+
     # Check Redis
     try:
         from app.core.state import get_state_manager
+
         manager = get_state_manager()
         await manager.get_active_calls()
         services["redis"] = "healthy"
     except Exception as e:
         services["redis"] = f"unhealthy: {e}"
-    
+
     # Check database
     try:
         from app.models import get_engine
+
         engine = get_engine()
         async with engine.connect() as conn:
             await conn.execute("SELECT 1")
         services["database"] = "healthy"
     except Exception as e:
         services["database"] = f"unhealthy: {e}"
-    
+
     return HealthCheck(
         status="healthy" if all("healthy" == v for v in services.values()) else "degraded",
         version="0.1.0",
@@ -140,6 +141,7 @@ async def root():
         "health": "/health",
     }
 
+
 # Include routers
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
@@ -156,7 +158,7 @@ app.include_router(seed_router, prefix="/api/v1")
 # Run with uvicorn
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,

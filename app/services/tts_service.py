@@ -4,7 +4,6 @@ Mash Voice - TTS Service (Deepgram)
 Handles text-to-speech using Deepgram's TTS API.
 """
 
-import asyncio
 from typing import AsyncIterator
 
 import httpx
@@ -18,7 +17,7 @@ logger = get_logger(__name__)
 class TTSService:
     """
     Text-to-Speech service using Deepgram.
-    
+
     Supports streaming TTS for low-latency audio generation.
     """
 
@@ -53,19 +52,19 @@ class TTSService:
     ) -> bytes:
         """
         Synthesize text to speech and return audio bytes.
-        
+
         Args:
             text: Text to synthesize
             voice: Deepgram voice model (default: aura-asteria-en)
             call_sid: Optional call SID for logging
-            
+
         Returns:
             Audio bytes in linear16 format (16kHz, mono)
         """
         log = CallLogger(call_sid) if call_sid else logger
-        
+
         client = await self._get_client()
-        
+
         url = "https://api.deepgram.com/v1/speak"
         headers = {
             "Authorization": f"Token {self._settings.deepgram_api_key}",
@@ -76,10 +75,10 @@ class TTSService:
             "encoding": "linear16",
             "sample_rate": 16000,
         }
-        
+
         try:
             log.debug("Starting TTS synthesis", text_length=len(text), voice=voice)
-            
+
             response = await client.post(
                 url,
                 headers=headers,
@@ -87,16 +86,16 @@ class TTSService:
                 json={"text": text},
             )
             response.raise_for_status()
-            
+
             audio_data = response.content
             log.info(
                 "TTS synthesis complete",
                 text_length=len(text),
                 audio_bytes=len(audio_data),
             )
-            
+
             return audio_data
-            
+
         except httpx.HTTPStatusError as e:
             log.error(
                 "TTS API error",
@@ -117,20 +116,20 @@ class TTSService:
     ) -> AsyncIterator[bytes]:
         """
         Synthesize text to speech with streaming output.
-        
+
         Args:
             text: Text to synthesize
             voice: Deepgram voice model
             call_sid: Optional call SID for logging
             chunk_size: Size of audio chunks to yield
-            
+
         Yields:
             Audio chunks in linear16 format
         """
         log = CallLogger(call_sid) if call_sid else logger
-        
+
         client = await self._get_client()
-        
+
         url = "https://api.deepgram.com/v1/speak"
         headers = {
             "Authorization": f"Token {self._settings.deepgram_api_key}",
@@ -141,10 +140,10 @@ class TTSService:
             "encoding": "linear16",
             "sample_rate": 16000,
         }
-        
+
         try:
             log.debug("Starting streaming TTS", text_length=len(text), voice=voice)
-            
+
             async with client.stream(
                 "POST",
                 url,
@@ -153,18 +152,18 @@ class TTSService:
                 json={"text": text},
             ) as response:
                 response.raise_for_status()
-                
+
                 total_bytes = 0
                 async for chunk in response.aiter_bytes(chunk_size):
                     total_bytes += len(chunk)
                     yield chunk
-                
+
                 log.info(
                     "Streaming TTS complete",
                     text_length=len(text),
                     total_bytes=total_bytes,
                 )
-                
+
         except httpx.HTTPStatusError as e:
             log.error(
                 "TTS streaming API error",
@@ -180,7 +179,7 @@ class TTSService:
 class TTSCache:
     """
     Simple in-memory cache for TTS audio.
-    
+
     Useful for common phrases that are repeated often.
     """
 
@@ -202,12 +201,12 @@ class TTSCache:
         """Cache audio data."""
         if key in self._cache:
             return
-        
+
         # Evict oldest if at capacity
         while len(self._cache) >= self._max_size:
             oldest_key = self._access_order.pop(0)
             del self._cache[oldest_key]
-        
+
         self._cache[key] = audio
         self._access_order.append(key)
 
@@ -236,18 +235,18 @@ class CachedTTSService:
     ) -> bytes:
         """Synthesize with caching."""
         cache_key = f"{voice}:{text}"
-        
+
         if use_cache:
             cached = self._cache.get(cache_key)
             if cached:
                 logger.debug("TTS cache hit", text_length=len(text))
                 return cached
-        
+
         audio = await self._tts.synthesize(text, voice, call_sid)
-        
+
         if use_cache and len(text) < 500:  # Only cache short phrases
             self._cache.set(cache_key, audio)
-        
+
         return audio
 
     async def synthesize_streaming(
@@ -258,9 +257,7 @@ class CachedTTSService:
         chunk_size: int = 4096,
     ) -> AsyncIterator[bytes]:
         """Streaming synthesis (no caching)."""
-        async for chunk in self._tts.synthesize_streaming(
-            text, voice, call_sid, chunk_size
-        ):
+        async for chunk in self._tts.synthesize_streaming(text, voice, call_sid, chunk_size):
             yield chunk
 
 

@@ -34,7 +34,7 @@ async def test_list_agents(client: AsyncClient):
     data = response.json()
     assert "agents" in data
     assert len(data["agents"]) > 0
-    
+
     # Check primary agent exists
     agent_names = [a["id"] for a in data["agents"]]
     assert "primary_agent" in agent_names

@@ -12,7 +12,7 @@ from app.config import get_settings
 def main():
     """Run the Mash Voice Platform server."""
     settings = get_settings()
-    
+
     print(f"""
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
@@ -23,7 +23,7 @@ def main():
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 """)
-    
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,
