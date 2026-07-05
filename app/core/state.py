@@ -43,6 +43,21 @@ def _reconstruct_key(chat_id: str, namespace: str) -> str:
         return chat_id
 
 
+def parse_session_id(session_id: str) -> tuple[str, str]:
+    """Parse session_id into (chat_id, channel)."""
+    if session_id.startswith("wa_"):
+        return session_id.replace("wa_", "", 1), "whatsapp"
+    elif session_id.startswith("whatsapp:"):
+        return session_id.replace("whatsapp:", "", 1), "whatsapp"
+    elif session_id.startswith("telegram:"):
+        return session_id.replace("telegram:", "", 1), "telegram"
+    elif ":" in session_id:
+        channel, chat_id = session_id.split(":", 1)
+        return chat_id, channel
+    else:
+        return session_id, "voice"
+
+
 class FakeRedis:
     """
     Compatibility layer that translates Redis operations used by the application
@@ -54,11 +69,14 @@ class FakeRedis:
 
     async def get(self, key: str) -> str | None:
         chat_id, namespace = _resolve_key(key)
+        channel = "voice" if namespace == "call" else (namespace if namespace != "redis_compat" else None)
         async with self._session_factory() as session:
-            stmt = select(ConversationState).where(
-                ConversationState.chat_id == chat_id,
-                ConversationState.namespace == namespace
-            )
+            stmt = select(ConversationState).where(ConversationState.chat_id == chat_id)
+            if channel:
+                stmt = stmt.where(ConversationState.channel == channel)
+            else:
+                stmt = stmt.where(ConversationState.namespace == namespace)
+                
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
             if row:
@@ -78,9 +96,10 @@ class FakeRedis:
                         intent=intent,
                         sentiment=sentiment,
                         metadata=metadata,
+                        chat_mode=slots_data.get("chat_mode", "single"),
                     )
                     return context.model_dump_json()
-                elif namespace == "whatsapp" or namespace == "generic":
+                elif namespace in ("whatsapp", "telegram", "generic"):
                     if row.slots and "_raw_state" in row.slots:
                         return json.dumps(row.slots["_raw_state"])
                     return json.dumps({
@@ -96,11 +115,13 @@ class FakeRedis:
 
     async def set(self, key: str, value: str, ex: int | None = None) -> None:
         chat_id, namespace = _resolve_key(key)
+        channel = "voice" if namespace == "call" else (namespace if namespace != "redis_compat" else None)
         async with self._session_factory() as session:
-            stmt = select(ConversationState).where(
-                ConversationState.chat_id == chat_id,
-                ConversationState.namespace == namespace
-            )
+            stmt = select(ConversationState).where(ConversationState.chat_id == chat_id)
+            if channel:
+                stmt = stmt.where(ConversationState.channel == channel)
+            else:
+                stmt = stmt.where(ConversationState.namespace == namespace)
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
             
@@ -111,7 +132,8 @@ class FakeRedis:
                     "collected_slots": context_dict.get("collected_slots", {}),
                     "intent": context_dict.get("intent"),
                     "sentiment": context_dict.get("sentiment"),
-                    "metadata": context_dict.get("metadata", {})
+                    "metadata": context_dict.get("metadata", {}),
+                    "chat_mode": context_dict.get("chat_mode", "single"),
                 }
                 history = context_dict.get("conversation_history", [])
                 
@@ -123,13 +145,13 @@ class FakeRedis:
                     row = ConversationState(
                         chat_id=chat_id,
                         namespace=namespace,
-                        channel=None, # Leave free
+                        channel=channel or "voice",
                         current_agent=current_agent,
                         slots=slots,
                         history=history,
                     )
                     session.add(row)
-            elif namespace == "whatsapp" or namespace == "generic":
+            elif namespace in ("whatsapp", "telegram", "generic"):
                 state = json.loads(value)
                 current_agent = state.get("current_agent") or state.get("current_agent_id")
                 slots = state.get("slots") or state.get("collected_slots") or {}
@@ -144,7 +166,7 @@ class FakeRedis:
                     row = ConversationState(
                         chat_id=chat_id,
                         namespace=namespace,
-                        channel="whatsapp", # WhatsApp channel value
+                        channel=channel or "whatsapp",
                         current_agent=current_agent,
                         slots=slots if isinstance(slots, dict) else {"data": slots},
                         history=history,
@@ -158,7 +180,7 @@ class FakeRedis:
                     row = ConversationState(
                         chat_id=chat_id,
                         namespace=namespace,
-                        channel=None,
+                        channel=channel,
                         slots={"value": value},
                         history=[],
                     )
@@ -171,10 +193,12 @@ class FakeRedis:
         async with self._session_factory() as session:
             for key in keys:
                 chat_id, namespace = _resolve_key(key)
-                stmt = select(ConversationState).where(
-                    ConversationState.chat_id == chat_id,
-                    ConversationState.namespace == namespace
-                )
+                channel = "voice" if namespace == "call" else (namespace if namespace != "redis_compat" else None)
+                stmt = select(ConversationState).where(ConversationState.chat_id == chat_id)
+                if channel:
+                    stmt = stmt.where(ConversationState.channel == channel)
+                else:
+                    stmt = stmt.where(ConversationState.namespace == namespace)
                 result = await session.execute(stmt)
                 row = result.scalar_one_or_none()
                 if row:
@@ -275,11 +299,14 @@ class FakeRedis:
     async def keys(self, pattern: str) -> List[str]:
         sql_pattern = pattern.replace("*", "%")
         namespace = None
+        channel = None
         if pattern.startswith("call:context:"):
             namespace = "call"
+            channel = "voice"
             sql_pattern = pattern.replace("call:context:", "", 1).replace("*", "%")
         elif pattern.startswith("session:state:"):
             namespace = "whatsapp"
+            channel = "whatsapp"
             sql_pattern = pattern.replace("session:state:", "", 1).replace("*", "%")
         elif pattern.startswith("ticket:"):
             namespace = "redis_compat"
@@ -288,7 +315,9 @@ class FakeRedis:
             stmt = select(ConversationState.chat_id, ConversationState.namespace).where(
                 ConversationState.chat_id.like(sql_pattern)
             )
-            if namespace:
+            if channel:
+                stmt = stmt.where(ConversationState.channel == channel)
+            elif namespace:
                 stmt = stmt.where(ConversationState.namespace == namespace)
             result = await session.execute(stmt)
             rows = result.all()
@@ -308,12 +337,15 @@ class FakeRedis:
             async def __anext__(self):
                 if self._keys is None:
                     namespace = None
+                    channel = None
                     sql_pattern = self._match_pattern.replace("*", "%")
                     if self._match_pattern.startswith("call:context:"):
                         namespace = "call"
+                        channel = "voice"
                         sql_pattern = self._match_pattern.replace("call:context:", "", 1).replace("*", "%")
                     elif self._match_pattern.startswith("session:state:"):
                         namespace = "whatsapp"
+                        channel = "whatsapp"
                         sql_pattern = self._match_pattern.replace("session:state:", "", 1).replace("*", "%")
                     elif self._match_pattern.startswith("conversation:"):
                         namespace = "redis_compat"
@@ -322,7 +354,9 @@ class FakeRedis:
                         stmt = select(ConversationState.chat_id, ConversationState.namespace).where(
                             ConversationState.chat_id.like(sql_pattern)
                         )
-                        if namespace:
+                        if channel:
+                            stmt = stmt.where(ConversationState.channel == channel)
+                        elif namespace:
                             stmt = stmt.where(ConversationState.namespace == namespace)
                         result = await session.execute(stmt)
                         rows = result.all()
@@ -375,7 +409,7 @@ class StateManager:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
                 ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.channel == "voice"
             )
             result = await session.execute(stmt)
             state = result.scalar_one_or_none()
@@ -384,15 +418,15 @@ class StateManager:
                 state = ConversationState(
                     chat_id=call_sid,
                     namespace="call",
-                    channel=None,
+                    channel="voice",
                     current_agent=initial_agent_id,
-                    slots={},
+                    slots={"chat_mode": context.chat_mode},
                     history=[],
                 )
                 session.add(state)
             else:
                 state.current_agent = initial_agent_id
-                state.slots = {}
+                state.slots = {"chat_mode": context.chat_mode}
                 state.history = []
             
             await session.commit()
@@ -405,7 +439,7 @@ class StateManager:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
                 ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.channel == "voice"
             )
             result = await session.execute(stmt)
             state = result.scalar_one_or_none()
@@ -427,6 +461,7 @@ class StateManager:
                     intent=intent,
                     sentiment=sentiment,
                     metadata=metadata,
+                    chat_mode=slots_data.get("chat_mode", "single"),
                 )
         return None
 
@@ -435,7 +470,7 @@ class StateManager:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
                 ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.channel == "voice"
             )
             result = await session.execute(stmt)
             state = result.scalar_one_or_none()
@@ -444,7 +479,8 @@ class StateManager:
                 "collected_slots": context.collected_slots,
                 "intent": context.intent,
                 "sentiment": context.sentiment,
-                "metadata": context.metadata
+                "metadata": context.metadata,
+                "chat_mode": context.chat_mode,
             }
             history = [turn.model_dump() for turn in context.conversation_history]
             
@@ -456,7 +492,7 @@ class StateManager:
                 state = ConversationState(
                     chat_id=call_sid,
                     namespace="call",
-                    channel=None,
+                    channel="voice",
                     current_agent=context.current_agent_id,
                     slots=slots,
                     history=history,
@@ -469,7 +505,7 @@ class StateManager:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
                 ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.channel == "voice"
             )
             result = await session.execute(stmt)
             state = result.scalar_one_or_none()
@@ -582,7 +618,7 @@ class StateManager:
         """Get all active call SIDs."""
         async with self._session_factory() as session:
             stmt = select(ConversationState.chat_id).where(
-                ConversationState.namespace == "call"
+                ConversationState.channel == "voice"
             )
             result = await session.execute(stmt)
             return set(result.scalars().all())
@@ -592,7 +628,7 @@ class StateManager:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
                 ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.channel == "voice"
             )
             result = await session.execute(stmt)
             return result.scalar_one_or_none() is not None
@@ -601,17 +637,12 @@ class StateManager:
 
     async def get_state(self, session_id: str) -> dict[str, Any] | None:
         """Get generic state for a session (e.g., WhatsApp conversation)."""
-        namespace = "generic"
-        chat_id = session_id
-        if ":" in session_id:
-            parts = session_id.split(":", 1)
-            namespace = parts[0]
-            chat_id = parts[1]
+        chat_id, channel = parse_session_id(session_id)
             
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
                 ConversationState.chat_id == chat_id,
-                ConversationState.namespace == namespace
+                ConversationState.channel == channel
             )
             result = await session.execute(stmt)
             state_row = result.scalar_one_or_none()
@@ -629,12 +660,7 @@ class StateManager:
 
     async def set_state(self, session_id: str, state: dict[str, Any]) -> None:
         """Set generic state for a session."""
-        namespace = "generic"
-        chat_id = session_id
-        if ":" in session_id:
-            parts = session_id.split(":", 1)
-            namespace = parts[0]
-            chat_id = parts[1]
+        chat_id, channel = parse_session_id(session_id)
             
         current_agent = state.get("current_agent") or state.get("current_agent_id")
         slots = state.get("slots") or state.get("collected_slots") or {}
@@ -643,7 +669,7 @@ class StateManager:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
                 ConversationState.chat_id == chat_id,
-                ConversationState.namespace == namespace
+                ConversationState.channel == channel
             )
             result = await session.execute(stmt)
             state_row = result.scalar_one_or_none()
@@ -658,20 +684,17 @@ class StateManager:
                     except AttributeError:
                         serialized_history.append(dict(item))
             
-            channel_val = namespace if namespace in ("whatsapp", "telegram") else None
-            
             if state_row:
                 state_row.current_agent = current_agent
                 state_row.slots = slots if isinstance(slots, dict) else {"data": slots}
                 state_row.history = serialized_history
                 state_row.slots["_raw_state"] = state
-                if channel_val:
-                    state_row.channel = channel_val
+                state_row.channel = channel
             else:
                 state_row = ConversationState(
                     chat_id=chat_id,
-                    namespace=namespace,
-                    channel=channel_val,
+                    namespace=channel,  # unique constraint compatibility
+                    channel=channel,
                     current_agent=current_agent,
                     slots=slots if isinstance(slots, dict) else {"data": slots},
                     history=serialized_history,

@@ -10,7 +10,6 @@ from app.agents.specialist_agents import (
     SalesAgent,
     SupportAgent,
 )
-from app.agents.customer_service_agent import CustomerServiceAgent
 
 __all__ = [
     "BaseAgent",
@@ -21,5 +20,4 @@ __all__ = [
     "SupportAgent",
     "SalesAgent",
     "HumanHandoffAgent",
-    "CustomerServiceAgent",
 ]

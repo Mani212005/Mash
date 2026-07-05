@@ -18,13 +18,23 @@ from app.agents import (
     SchedulerAgent,
     SupportAgent,
 )
-from app.agents.customer_service_agent import CustomerServiceAgent
 from app.core.state import StateManager, get_state_manager
-from app.models.schemas import CallContext, ToolDefinition
+from app.models.schemas import CallContext, ToolDefinition, Message, ChannelType
 from app.tools import get_tool_registry, register_all_tools
 from app.utils.logging import CallLogger, get_logger
+from pydantic import BaseModel, Field
 
 logger = get_logger(__name__)
+
+class Response(BaseModel):
+    """Channel-agnostic response schema."""
+    message: str = Field(..., description="Response text message")
+    agent: str = Field(..., description="Agent that generated the response")
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list, description="Tool calls generated during processing")
+    transfer_to: str | None = Field(None, description="Agent transferred to, if any")
+    context_update: dict[str, Any] = Field(default_factory=dict, description="Context updates")
+    options: list[str] | None = Field(None, description="Interactive reply buttons/options")
+    next_agent: str | None = Field(None, description="Next agent ID")
 
 
 class AgentRegistry:
@@ -86,7 +96,6 @@ class AgentOrchestrator:
             SupportAgent(),
             SalesAgent(),
             HumanHandoffAgent(),
-            CustomerServiceAgent(),  # Customer service chatbot
         ]
         for agent in agents:
             self._agent_registry.register(agent)
@@ -124,6 +133,9 @@ class AgentOrchestrator:
             initial_agent_id=initial_agent,
             metadata=metadata,
         )
+        
+        if context.chat_mode == "panel":
+            raise NotImplementedError("Panel mode is not implemented.")
         
         # Get the initial agent
         agent = self._agent_registry.get(initial_agent)
@@ -176,6 +188,9 @@ class AgentOrchestrator:
                 text="I'm sorry, there was an error. Could you please call back?",
                 error="Context not found",
             )
+            
+        if context.chat_mode == "panel":
+            raise NotImplementedError("Panel mode is not implemented.")
         
         # Add user input to history
         await self._state_manager.add_conversation_turn(
@@ -416,6 +431,78 @@ class AgentOrchestrator:
             context_updates={"transferred_from": from_agent},
         )
 
+    async def handle_message(self, message: Message) -> Response:
+        """
+        Handle an incoming message in a channel-agnostic way.
+        """
+        session_id = f"wa_{message.chat_id}" if message.channel == ChannelType.WHATSAPP else f"{message.channel.value}:{message.chat_id}"
+        
+        # Get or create conversation state
+        state = await self._state_manager.get_state(session_id) or {
+            "phone_number": message.sender_id,
+            "messages": [],
+            "current_agent": "primary_agent",
+            "context": {},
+        }
+        
+        user_text = message.text or message.transcript or ""
+        
+        # Add user message to history
+        state["messages"].append({
+            "role": "user",
+            "content": user_text,
+            "timestamp": message.timestamp.isoformat(),
+            "message_id": message.message_id,
+        })
+        
+        # Ensure context has call state initialized
+        call_context = await self._state_manager.get_call_context(session_id)
+        if not call_context:
+            call_context = await self._state_manager.create_call_state(
+                call_sid=session_id,
+                initial_agent_id=state.get("current_agent") or "primary_agent",
+                metadata=state.get("context", {}),
+            )
+        else:
+            if state.get("current_agent") and state["current_agent"] != call_context.current_agent_id:
+                await self._state_manager.set_current_agent(session_id, state["current_agent"])
+        
+        if call_context and call_context.chat_mode == "panel":
+            raise NotImplementedError("Panel mode is not implemented.")
+        
+        # Process through agent orchestrator
+        agent_response = await self.process_input(
+            call_sid=session_id,
+            user_input=user_text,
+        )
+        
+        # Update state with agent response
+        state["messages"].append({
+            "role": "assistant",
+            "content": agent_response.text,
+            "timestamp": datetime.utcnow().isoformat(),
+            "agent": agent_response.agent_id,
+        })
+        
+        if agent_response.context_updates:
+            state["context"].update(agent_response.context_updates)
+        
+        if agent_response.transfer_to:
+            state["current_agent"] = agent_response.transfer_to
+            
+        # Save state
+        await self._state_manager.set_state(session_id, state)
+        
+        return Response(
+            message=agent_response.text,
+            agent=agent_response.agent_id,
+            tool_calls=[tc.to_dict() for tc in agent_response.tool_calls] if agent_response.tool_calls else [],
+            transfer_to=agent_response.transfer_to,
+            context_update=agent_response.context_updates,
+            options=None,
+            next_agent=agent_response.transfer_to,
+        )
+
     async def process_message(
         self,
         session_id: str,
@@ -423,54 +510,38 @@ class AgentOrchestrator:
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
-        Process a message and return the response.
-        
-        Simplified interface for WhatsApp integration.
-        
-        Args:
-            session_id: Session identifier
-            message: User message text
-            context: Optional context dict
-            
-        Returns:
-            Response dict with message, agent, options, etc.
+        Process a message and return the response (compatibility wrapper calling handle_message).
         """
-        try:
-            # Get or create call context
-            call_context = await self._state_manager.get_call_context(session_id)
-            
-            if not call_context:
-                # Initialize new session
-                await self._state_manager.create_call_state(
-                    call_sid=session_id,
-                    initial_agent_id="primary_agent",
-                    metadata=context,
-                )
-                call_context = await self._state_manager.get_call_context(session_id)
-            
-            # Process through the agent
-            response = await self.process_input(
-                call_sid=session_id,
-                user_input=message,
-            )
-            
-            return {
-                "message": response.text,
-                "agent": response.agent_id,
-                "tool_calls": [tc.model_dump() for tc in response.tool_calls] if response.tool_calls else [],
-                "transfer_to": response.transfer_to,
-                "context_update": response.context_updates,
-                "options": None,  # Can be extended to provide button options
-                "next_agent": response.transfer_to,
-            }
-            
-        except Exception as e:
-            logger.exception("Error processing message", error=str(e))
-            return {
-                "message": "I apologize, but I encountered an error. Please try again.",
-                "agent": "primary_agent",
-                "error": str(e),
-            }
+        # Map session_id to Message
+        channel = ChannelType.WHATSAPP
+        chat_id = session_id
+        if session_id.startswith("wa_"):
+            chat_id = session_id.replace("wa_", "", 1)
+        elif ":" in session_id:
+            parts = session_id.split(":", 1)
+            chat_id = parts[1]
+            if parts[0] == "telegram":
+                channel = ChannelType.TELEGRAM
+                
+        msg = Message(
+            message_id="compat_" + str(datetime.utcnow().timestamp()),
+            chat_id=chat_id,
+            sender_id=chat_id,
+            channel=channel,
+            text=message,
+            is_bot=False,
+        )
+        
+        res = await self.handle_message(msg)
+        return {
+            "message": res.message,
+            "agent": res.agent,
+            "tool_calls": res.tool_calls,
+            "transfer_to": res.transfer_to,
+            "context_update": res.context_update,
+            "options": res.options,
+            "next_agent": res.next_agent,
+        }
 
 
 # Singleton instance

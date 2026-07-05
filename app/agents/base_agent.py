@@ -1,7 +1,7 @@
 """
 Mash Voice - Base Agent
 
-Abstract base class for all voice agents.
+Abstract base class for all voice agents with LLM provider abstraction.
 """
 
 from abc import ABC, abstractmethod
@@ -19,12 +19,154 @@ from app.utils.logging import CallLogger, get_logger
 logger = get_logger(__name__)
 
 
+class ToolCall:
+    """Represents a tool call from the agent."""
+
+    def __init__(self, id: str, name: str, arguments: str):
+        self.id = id
+        self.name = name
+        self.arguments = arguments
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "arguments": self.arguments,
+        }
+
+
+class AgentResponse:
+    """Response from an agent."""
+
+    def __init__(
+        self,
+        agent_id: str,
+        text: str,
+        tool_calls: list[ToolCall] | None = None,
+        context_updates: dict[str, Any] | None = None,
+        error: str | None = None,
+        transfer_to: str | None = None,
+    ):
+        self.agent_id = agent_id
+        self.text = text
+        self.tool_calls = tool_calls or []
+        self.context_updates = context_updates or {}
+        self.error = error
+        self.transfer_to = transfer_to
+        self.timestamp = datetime.utcnow()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "agent_id": self.agent_id,
+            "text": self.text,
+            "tool_calls": [tc.to_dict() for tc in self.tool_calls],
+            "context_updates": self.context_updates,
+            "error": self.error,
+            "transfer_to": self.transfer_to,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+
+class LLMResponse:
+    """Response from an LLM call containing text and optional tool calls."""
+
+    def __init__(self, text: str, tool_calls: list[ToolCall] | None = None):
+        self.text = text
+        self.tool_calls = tool_calls or []
+
+
+class LLMProvider(ABC):
+    """Abstract base class for LLM providers."""
+
+    @abstractmethod
+    async def generate(
+        self,
+        messages: list[dict[str, str]],
+        system_instruction: str,
+        tools: list[ToolDefinition] | None = None,
+        temperature: float = 0.7,
+        max_output_tokens: int = 500,
+    ) -> LLMResponse:
+        """Generate response from the LLM."""
+        pass
+
+
+class GeminiProvider(LLMProvider):
+    """Gemini-based LLM provider implementation."""
+
+    def __init__(self, api_key: str, model: str):
+        self._client = genai.Client(api_key=api_key)
+        self._model = model
+
+    async def generate(
+        self,
+        messages: list[dict[str, str]],
+        system_instruction: str,
+        tools: list[ToolDefinition] | None = None,
+        temperature: float = 0.7,
+        max_output_tokens: int = 500,
+    ) -> LLMResponse:
+        # Build contents
+        contents = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part(text=msg["content"])],
+                )
+            )
+
+        gemini_tools = None
+        if tools:
+            function_declarations = [
+                types.FunctionDeclaration(
+                    name=t.name,
+                    description=t.description,
+                    parameters=t.parameters,
+                )
+                for t in tools
+            ]
+            gemini_tools = [types.Tool(function_declarations=function_declarations)]
+
+        config = types.GenerateContentConfig(
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            system_instruction=system_instruction,
+            tools=gemini_tools,
+        )
+
+        response = await self._client.aio.models.generate_content(
+            model=self._model,
+            contents=contents,
+            config=config,
+        )
+
+        tool_calls = []
+        text = ""
+
+        if response.candidates and response.candidates[0].content:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    text += part.text
+                elif part.function_call:
+                    fc = part.function_call
+                    tool_calls.append(
+                        ToolCall(
+                            id=f"call_{fc.name}_{len(tool_calls)}",
+                            name=fc.name,
+                            arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
+                        )
+                    )
+
+        return LLMResponse(text=text, tool_calls=tool_calls)
+
+
 class BaseAgent(ABC):
     """
     Abstract base class for voice agents.
     
     All agents must implement:
-    - process(): Handle user input and generate response
     - should_transfer(): Determine if call should transfer to another agent
     """
 
@@ -46,14 +188,17 @@ class BaseAgent(ABC):
 
     def __init__(self):
         self._settings = get_settings()
-        self._gemini_client = genai.Client(api_key=self._settings.gemini_api_key)
+        self.llm_client = GeminiProvider(
+            api_key=self._settings.gemini_api_key,
+            model=self._settings.gemini_model,
+        )
 
     async def process(
         self,
         user_input: str,
         context: CallContext,
         tool_definitions: list[ToolDefinition] | None = None,
-    ) -> "AgentResponse":
+    ) -> AgentResponse:
         """
         Process user input and generate a response.
         
@@ -68,74 +213,45 @@ class BaseAgent(ABC):
         log = CallLogger(context.call_sid)
         
         try:
-            # Build conversation contents for Gemini
-            contents = self._build_gemini_contents(user_input, context)
+            # Build conversation messages for the LLM provider
+            messages = []
+            for turn in context.conversation_history[-10:]:  # Last 10 turns
+                messages.append({
+                    "role": "user" if turn.role == "user" else "assistant",
+                    "content": turn.content
+                })
+            messages.append({
+                "role": "user",
+                "content": user_input
+            })
             
-            # Prepare tools for Gemini
-            gemini_tools = None
-            if tool_definitions:
-                function_declarations = [
-                    types.FunctionDeclaration(
-                        name=t.name,
-                        description=t.description,
-                        parameters=t.parameters,
-                    )
-                    for t in tool_definitions
-                ]
-                gemini_tools = [types.Tool(function_declarations=function_declarations)]
+            log.debug("Calling LLM Provider", content_count=len(messages))
             
-            log.debug("Calling Gemini", content_count=len(contents))
-            
-            # Build config
-            config = types.GenerateContentConfig(
+            llm_response = await self.llm_client.generate(
+                messages=messages,
+                system_instruction=self._build_system_prompt(context),
+                tools=tool_definitions,
                 temperature=0.7,
-                max_output_tokens=500,  # Keep responses concise for voice
-                system_instruction=self.system_prompt,
-                tools=gemini_tools,
+                max_output_tokens=500,
             )
             
-            # Call Gemini
-            response = await self._gemini_client.aio.models.generate_content(
-                model=self._settings.gemini_model,
-                contents=contents,
-                config=config,
-            )
-            
-            # Handle Gemini response
-            tool_calls = []
-            text = ""
-            
-            if response.candidates and response.candidates[0].content:
-                for part in response.candidates[0].content.parts:
-                    if part.text:
-                        text += part.text
-                    elif part.function_call:
-                        fc = part.function_call
-                        tool_calls.append(
-                            ToolCall(
-                                id=f"call_{fc.name}_{len(tool_calls)}",
-                                name=fc.name,
-                                arguments=json.dumps(dict(fc.args)) if fc.args else "{}",
-                            )
-                        )
-            
-            if tool_calls:
+            if llm_response.tool_calls:
                 log.info(
                     "LLM requested tool calls",
-                    tools=[tc.name for tc in tool_calls],
+                    tools=[tc.name for tc in llm_response.tool_calls],
                 )
             
             log.info(
                 "Agent response generated",
                 agent=self.name,
-                response_length=len(text),
-                tool_calls=len(tool_calls),
+                response_length=len(llm_response.text),
+                tool_calls=len(llm_response.tool_calls),
             )
             
             return AgentResponse(
                 agent_id=self.name,
-                text=text,
-                tool_calls=tool_calls,
+                text=llm_response.text,
+                tool_calls=llm_response.tool_calls,
                 context_updates={},
             )
             
@@ -209,34 +325,6 @@ class BaseAgent(ABC):
         """
         return "I'm sorry, I encountered an issue. Let me try that again."
 
-    def _build_gemini_contents(
-        self,
-        user_input: str,
-        context: CallContext,
-    ) -> list[types.Content]:
-        """Build the content list for Gemini."""
-        contents = []
-        
-        # Add conversation history
-        for turn in context.conversation_history[-10:]:  # Last 10 turns
-            role = "user" if turn.role == "user" else "model"
-            contents.append(
-                types.Content(
-                    role=role,
-                    parts=[types.Part(text=turn.content)],
-                )
-            )
-        
-        # Add current user input
-        contents.append(
-            types.Content(
-                role="user",
-                parts=[types.Part(text=user_input)],
-            )
-        )
-        
-        return contents
-
     def _build_system_prompt(self, context: CallContext) -> str:
         """Build the system prompt with context."""
         prompt = self.system_prompt
@@ -253,51 +341,3 @@ class BaseAgent(ABC):
             prompt += f"\n\nDetected intent: {context.intent}"
         
         return prompt
-
-
-class ToolCall:
-    """Represents a tool call from the agent."""
-
-    def __init__(self, id: str, name: str, arguments: str):
-        self.id = id
-        self.name = name
-        self.arguments = arguments
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "arguments": self.arguments,
-        }
-
-
-class AgentResponse:
-    """Response from an agent."""
-
-    def __init__(
-        self,
-        agent_id: str,
-        text: str,
-        tool_calls: list[ToolCall] | None = None,
-        context_updates: dict[str, Any] | None = None,
-        error: str | None = None,
-        transfer_to: str | None = None,
-    ):
-        self.agent_id = agent_id
-        self.text = text
-        self.tool_calls = tool_calls or []
-        self.context_updates = context_updates or {}
-        self.error = error
-        self.transfer_to = transfer_to
-        self.timestamp = datetime.utcnow()
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "agent_id": self.agent_id,
-            "text": self.text,
-            "tool_calls": [tc.to_dict() for tc in self.tool_calls],
-            "context_updates": self.context_updates,
-            "error": self.error,
-            "transfer_to": self.transfer_to,
-            "timestamp": self.timestamp.isoformat(),
-        }
