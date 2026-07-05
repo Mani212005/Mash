@@ -5,7 +5,7 @@ Mash Voice - Configuration Management
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn
+from pydantic import Field, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,11 +39,6 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(default="", description="Google Gemini API Key")
     gemini_model: str = Field(default="gemini-2.0-flash", description="Gemini Model")
 
-    # Redis Configuration
-    redis_url: RedisDsn = Field(
-        default="redis://localhost:6379/0", description="Redis URL"
-    )
-
     # Database Configuration
     database_url: PostgresDsn = Field(
         default="postgresql+asyncpg://user:password@localhost:5432/mash_voice",
@@ -68,10 +63,6 @@ class Settings(BaseSettings):
     # Timeouts and Limits
     llm_timeout_seconds: float = Field(default=30.0, description="LLM timeout")
     max_conversation_duration_seconds: int = Field(default=3600, description="Max conversation duration")
-
-    @property
-    def redis_url_str(self) -> str:
-        return str(self.redis_url)
 
     @property
     def database_url_str(self) -> str:

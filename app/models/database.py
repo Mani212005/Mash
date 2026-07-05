@@ -7,9 +7,9 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, synonym
 
 from app.config import get_settings
 
@@ -26,7 +26,8 @@ class Call(Base):
     __tablename__ = "calls"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    twilio_call_sid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    channel_session_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    twilio_call_sid = synonym("channel_session_id")
     
     # Call call_metadata
     direction: Mapped[str] = mapped_column(String(16))  # inbound, outbound
@@ -157,6 +158,25 @@ class ToolInvocation(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     duration_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class ConversationState(Base):
+    """Represents the conversational state for a chat session, replacing Redis."""
+
+    __tablename__ = "conversation_states"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    chat_id: Mapped[str] = mapped_column(String(64), index=True)
+    channel: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    namespace: Mapped[str] = mapped_column(String(32), index=True)
+    current_agent: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    slots: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    history: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_conversation_states_chat_namespace", "chat_id", "namespace", unique=True),
+    )
 
 
 # Database connection utilities

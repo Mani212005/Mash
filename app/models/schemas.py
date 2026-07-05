@@ -4,10 +4,10 @@ Mash Voice - Pydantic Schemas
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, AliasChoices, computed_field
 
 
 # ============ Enums ============
@@ -72,7 +72,7 @@ class CallResponse(BaseModel):
     """Schema for call response."""
 
     id: UUID
-    twilio_call_sid: str
+    channel_session_id: str = Field(..., validation_alias=AliasChoices("channel_session_id", "twilio_call_sid"), serialization_alias="channel_session_id")
     direction: CallDirection
     from_number: str
     to_number: str
@@ -84,6 +84,11 @@ class CallResponse(BaseModel):
     current_agent_id: str | None = None
     agent_history: list[str] = []
     metadata: dict[str, Any] = {}
+
+    @computed_field
+    @property
+    def twilio_call_sid(self) -> str:
+        return self.channel_session_id
 
     class Config:
         from_attributes = True
@@ -189,8 +194,8 @@ class AgentResponse(BaseModel):
     transfer_rules: dict[str, Any]
     is_active: bool
     config: dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -291,13 +296,45 @@ class ConversationTurn(BaseModel):
 class CallContext(BaseModel):
     """Schema for call context/state."""
 
-    call_sid: str
+    channel_session_id: str = Field(..., validation_alias=AliasChoices("channel_session_id", "call_sid"), serialization_alias="channel_session_id")
     current_agent_id: str
     conversation_history: list[ConversationTurn] = Field(default_factory=list)
     collected_slots: dict[str, Any] = Field(default_factory=dict)
     intent: str | None = None
     sentiment: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    chat_mode: Literal["single", "panel"] = Field(default="single")
+
+    @computed_field
+    @property
+    def call_sid(self) -> str:
+        return self.channel_session_id
+
+    @call_sid.setter
+    def call_sid(self, value: str) -> None:
+        self.channel_session_id = value
+
+
+# ============ Message Schemas ============
+
+
+class ChannelType(str, Enum):
+    WHATSAPP = "whatsapp"
+    TELEGRAM = "telegram"
+
+
+class Message(BaseModel):
+    """Channel-agnostic message schema."""
+
+    message_id: str
+    chat_id: str
+    sender_id: str
+    channel: ChannelType
+    text: str | None = None
+    audio_url: str | None = None
+    transcript: str | None = None
+    is_bot: bool
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
 # ============ Health & Status Schemas ============
