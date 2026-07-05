@@ -6,7 +6,7 @@ Example tools for common voice agent tasks.
 
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from app.tools.base_tool import BaseTool, ToolResult
@@ -23,7 +23,7 @@ class CheckAvailabilityTool(BaseTool):
 
     name = "check_availability"
     description = "Check available appointment slots for a given date"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -42,32 +42,32 @@ class CheckAvailabilityTool(BaseTool):
     async def execute(self, **params: Any) -> ToolResult:
         date_str = params.get("date")
         service_type = params.get("service_type", "general")
-        
+
         self._logger.info("Checking availability", date=date_str, service=service_type)
-        
+
         # Mock availability data
         # In production, this would query a real scheduling system
         try:
-            date = datetime.strptime(date_str, "%Y-%m-%d")
+            datetime.strptime(date_str, "%Y-%m-%d")
         except ValueError:
             return ToolResult(
                 success=False,
                 error="Invalid date format. Please use YYYY-MM-DD.",
             )
-        
+
         # Generate mock available slots
         available_slots = []
         for hour in [9, 10, 11, 14, 15, 16]:
             if random.random() > 0.3:  # 70% chance slot is available
                 available_slots.append(f"{hour}:00")
-        
+
         if not available_slots:
             return ToolResult(
                 success=True,
                 data={"date": date_str, "available_slots": []},
                 message=f"I'm sorry, there are no available appointments on {date_str}. Would you like to check another date?",
             )
-        
+
         return ToolResult(
             success=True,
             data={
@@ -84,7 +84,7 @@ class BookAppointmentTool(BaseTool):
 
     name = "book_appointment"
     description = "Book an appointment for the caller"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -120,17 +120,17 @@ class BookAppointmentTool(BaseTool):
         date = params.get("date")
         time = params.get("time")
         customer_name = params.get("customer_name")
-        
+
         self._logger.info(
             "Booking appointment",
             date=date,
             time=time,
             customer=customer_name,
         )
-        
+
         # Generate confirmation number
         confirmation = "APT-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-        
+
         # In production, this would create the appointment in a real system
         return ToolResult(
             success=True,
@@ -149,7 +149,7 @@ class CancelAppointmentTool(BaseTool):
 
     name = "cancel_appointment"
     description = "Cancel an existing appointment"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -167,9 +167,9 @@ class CancelAppointmentTool(BaseTool):
 
     async def execute(self, **params: Any) -> ToolResult:
         confirmation = params.get("confirmation_number")
-        
+
         self._logger.info("Cancelling appointment", confirmation=confirmation)
-        
+
         # In production, this would cancel in a real system
         return ToolResult(
             success=True,
@@ -186,7 +186,7 @@ class CreateSupportTicketTool(BaseTool):
 
     name = "create_support_ticket"
     description = "Create a support ticket for follow-up"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -214,12 +214,12 @@ class CreateSupportTicketTool(BaseTool):
     async def execute(self, **params: Any) -> ToolResult:
         subject = params.get("subject")
         priority = params.get("priority", "medium")
-        
+
         self._logger.info("Creating support ticket", subject=subject, priority=priority)
-        
+
         # Generate ticket number
         ticket_id = "TKT-" + "".join(random.choices(string.digits, k=8))
-        
+
         return ToolResult(
             success=True,
             data={
@@ -237,7 +237,7 @@ class LookupCustomerTool(BaseTool):
 
     name = "lookup_customer"
     description = "Look up customer information by phone number or email"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -256,15 +256,15 @@ class LookupCustomerTool(BaseTool):
     async def execute(self, **params: Any) -> ToolResult:
         phone = params.get("phone")
         email = params.get("email")
-        
+
         if not phone and not email:
             return ToolResult(
                 success=False,
                 error="Please provide either a phone number or email address.",
             )
-        
+
         self._logger.info("Looking up customer", phone=phone, email=email)
-        
+
         # Mock customer data
         return ToolResult(
             success=True,
@@ -287,7 +287,7 @@ class GetBusinessHoursTool(BaseTool):
 
     name = "check_business_hours"
     description = "Get the business operating hours"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -309,7 +309,7 @@ class GetBusinessHoursTool(BaseTool):
             "Saturday": "10:00 AM - 2:00 PM",
             "Sunday": "Closed",
         }
-        
+
         day = params.get("day")
         if day and day.capitalize() in hours:
             day_hours = hours[day.capitalize()]
@@ -318,7 +318,7 @@ class GetBusinessHoursTool(BaseTool):
                 data={"day": day.capitalize(), "hours": day_hours},
                 message=f"We're open on {day.capitalize()} from {day_hours}.",
             )
-        
+
         return ToolResult(
             success=True,
             data={"hours": hours},
@@ -331,7 +331,7 @@ class GetCompanyInfoTool(BaseTool):
 
     name = "get_company_info"
     description = "Get general company information like address, phone, services"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -352,7 +352,7 @@ class GetCompanyInfoTool(BaseTool):
             "website": "www.acme.com",
             "services": ["Consulting", "Support", "Training"],
         }
-        
+
         return ToolResult(
             success=True,
             data=info,
@@ -368,7 +368,7 @@ class GetProductInfoTool(BaseTool):
 
     name = "get_product_info"
     description = "Get information about products or services"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -382,7 +382,7 @@ class GetProductInfoTool(BaseTool):
 
     async def execute(self, **params: Any) -> ToolResult:
         product_name = params.get("product_name", "").lower()
-        
+
         # Mock product catalog
         products = {
             "basic": {
@@ -398,10 +398,15 @@ class GetProductInfoTool(BaseTool):
             "enterprise": {
                 "name": "Enterprise Plan",
                 "price": "Custom pricing",
-                "features": ["Unlimited users", "24/7 support", "Unlimited storage", "Custom integrations"],
+                "features": [
+                    "Unlimited users",
+                    "24/7 support",
+                    "Unlimited storage",
+                    "Custom integrations",
+                ],
             },
         }
-        
+
         for key, product in products.items():
             if key in product_name or product_name in product["name"].lower():
                 return ToolResult(
@@ -409,7 +414,7 @@ class GetProductInfoTool(BaseTool):
                     data=product,
                     message=f"The {product['name']} is {product['price']} and includes {', '.join(product['features'][:2])}. Would you like more details?",
                 )
-        
+
         return ToolResult(
             success=True,
             data={"products": list(products.values())},
@@ -422,7 +427,7 @@ class CreateLeadTool(BaseTool):
 
     name = "create_lead"
     description = "Create a sales lead for follow-up"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -457,11 +462,11 @@ class CreateLeadTool(BaseTool):
     async def execute(self, **params: Any) -> ToolResult:
         name = params.get("name")
         interest = params.get("interest", "general inquiry")
-        
+
         self._logger.info("Creating lead", name=name, interest=interest)
-        
+
         lead_id = "LEAD-" + "".join(random.choices(string.digits, k=6))
-        
+
         return ToolResult(
             success=True,
             data={
@@ -481,7 +486,7 @@ class TransferToHumanTool(BaseTool):
 
     name = "transfer_to_human"
     description = "Transfer the call to a human agent"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -504,13 +509,13 @@ class TransferToHumanTool(BaseTool):
     async def execute(self, **params: Any) -> ToolResult:
         department = params.get("department", "general")
         reason = params.get("reason")
-        
+
         self._logger.info(
             "Transferring to human",
             department=department,
             reason=reason,
         )
-        
+
         # In production, this would initiate actual call transfer
         return ToolResult(
             success=True,
@@ -528,7 +533,7 @@ class AddCallNotesTool(BaseTool):
 
     name = "add_call_notes"
     description = "Add notes to the current call for human agent reference"
-    
+
     parameters = {
         "type": "object",
         "properties": {
@@ -545,11 +550,11 @@ class AddCallNotesTool(BaseTool):
     }
 
     async def execute(self, **params: Any) -> ToolResult:
-        notes = params.get("notes")
+        params.get("notes")
         category = params.get("category", "general")
-        
+
         self._logger.info("Adding call notes", category=category)
-        
+
         return ToolResult(
             success=True,
             data={"notes_added": True, "category": category},
@@ -564,9 +569,9 @@ def register_all_tools():
     """Register all built-in tools."""
     from app.tools.base_tool import get_tool_registry
     from app.tools.customer_service_tools import register_customer_service_tools
-    
+
     registry = get_tool_registry()
-    
+
     tools = [
         CheckAvailabilityTool(),
         BookAppointmentTool(),
@@ -580,11 +585,11 @@ def register_all_tools():
         TransferToHumanTool(),
         AddCallNotesTool(),
     ]
-    
+
     for tool in tools:
         registry.register(tool)
-    
+
     logger.info(f"Registered {len(tools)} built-in tools")
-    
+
     # Register customer service tools
     register_customer_service_tools()

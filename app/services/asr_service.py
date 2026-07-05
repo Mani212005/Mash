@@ -4,11 +4,10 @@ Mash Voice - ASR Service (Deepgram Streaming)
 Handles real-time speech-to-text using Deepgram's streaming API.
 """
 
-import asyncio
 from datetime import datetime
-from typing import Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable
 
-from deepgram import DeepgramClient, AsyncDeepgramClient
+from deepgram import AsyncDeepgramClient
 
 from app.config import get_settings
 from app.utils.logging import CallLogger, get_logger
@@ -51,7 +50,7 @@ class TranscriptResult:
 class ASRSession:
     """
     Manages a single ASR session for a call.
-    
+
     Handles streaming audio to Deepgram and receiving transcripts.
     Note: Deepgram v3 SDK uses REST/WebSocket APIs directly without event handlers.
     """
@@ -72,15 +71,13 @@ class ASRSession:
     async def start(self) -> None:
         """Start the ASR session."""
         settings = get_settings()
-        
+
         try:
             # Create Deepgram async client
-            self._client = AsyncDeepgramClient(
-                api_key=settings.deepgram_api_key
-            )
+            self._client = AsyncDeepgramClient(api_key=settings.deepgram_api_key)
             self._is_active = True
             self._log.info("ASR session started", model="nova-2")
-                
+
         except Exception as e:
             self._log.error("Failed to start ASR session", error=str(e))
             raise
@@ -89,7 +86,7 @@ class ASRSession:
         """Send audio data to the ASR service for transcription."""
         if not self._is_active or not self._client:
             return
-            
+
         try:
             # Transcribe the audio using REST API (simpler than streaming)
             response = await self._client.listen.rest.v("1").transcribe_file(
@@ -99,31 +96,35 @@ class ASRSession:
                     "language": "en-US",
                     "smart_format": True,
                     "punctuate": True,
-                }
+                },
             )
-            
+
             if response and response.results:
                 channels = response.results.channels
                 if channels and channels[0].alternatives:
                     transcript_text = channels[0].alternatives[0].transcript
-                    
+
                     if transcript_text:
                         transcript = TranscriptResult(
                             text=transcript_text,
                             is_final=True,
-                            confidence=channels[0].alternatives[0].confidence if hasattr(channels[0].alternatives[0], 'confidence') else 0.0,
+                            confidence=(
+                                channels[0].alternatives[0].confidence
+                                if hasattr(channels[0].alternatives[0], "confidence")
+                                else 0.0
+                            ),
                             start_time=0.0,
                             end_time=0.0,
                         )
-                        
+
                         self._log.info(
                             "Final transcript",
                             text=transcript_text,
                         )
-                        
+
                         if self.on_transcript:
                             await self.on_transcript(transcript)
-            
+
         except Exception as e:
             self._log.error("Error transcribing audio", error=str(e))
             if self.on_error:
@@ -157,14 +158,14 @@ class ASRService:
         if call_sid in self._sessions:
             # Close existing session
             await self.close_session(call_sid)
-        
+
         session = ASRSession(
             call_sid=call_sid,
             on_transcript=on_transcript,
             on_error=on_error,
         )
         await session.start()
-        
+
         self._sessions[call_sid] = session
         return session
 
@@ -187,7 +188,7 @@ class ASRService:
 class DeepgramASRService:
     """
     Service for file-based (non-streaming) audio transcription.
-    
+
     Used for transcribing WhatsApp voice messages and other audio files.
     """
 
@@ -198,9 +199,7 @@ class DeepgramASRService:
     def _get_client(self) -> AsyncDeepgramClient:
         """Get or create Deepgram client."""
         if self._client is None:
-            self._client = AsyncDeepgramClient(
-                api_key=self._settings.deepgram_api_key
-            )
+            self._client = AsyncDeepgramClient(api_key=self._settings.deepgram_api_key)
         return self._client
 
     async def transcribe_audio(
@@ -211,18 +210,18 @@ class DeepgramASRService:
     ) -> str | None:
         """
         Transcribe audio data to text.
-        
+
         Args:
             audio_data: Raw audio bytes
             mimetype: Audio MIME type (audio/ogg, audio/mpeg, etc.)
             language: Language code
-            
+
         Returns:
             Transcribed text or None if transcription failed
         """
         try:
             client = self._get_client()
-            
+
             # Deepgram SDK v5 API: client.listen.v1.media.transcribe_file()
             # All options are passed as keyword arguments directly
             response = await client.listen.v1.media.transcribe_file(
@@ -232,7 +231,7 @@ class DeepgramASRService:
                 smart_format=True,
                 punctuate=True,
             )
-            
+
             # Extract transcript from response (ListenV1Response)
             if response and response.results:
                 channels = response.results.channels
@@ -244,10 +243,10 @@ class DeepgramASRService:
                         transcript_length=len(transcript) if transcript else 0,
                     )
                     return transcript.strip() if transcript else None
-            
+
             logger.warning("No transcript returned from Deepgram")
             return None
-            
+
         except Exception as e:
             logger.exception("Error transcribing audio", error=str(e))
             return None

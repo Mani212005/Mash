@@ -10,8 +10,7 @@ from typing import Any, Dict, List, Set
 
 from sqlalchemy import select
 
-from app.config import get_settings
-from app.models.database import get_session_factory, ConversationState
+from app.models.database import ConversationState, get_session_factory
 from app.models.schemas import CallContext, ConversationTurn
 from app.utils.logging import get_logger
 
@@ -56,8 +55,7 @@ class FakeRedis:
         chat_id, namespace = _resolve_key(key)
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == chat_id,
-                ConversationState.namespace == namespace
+                ConversationState.chat_id == chat_id, ConversationState.namespace == namespace
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -68,7 +66,7 @@ class FakeRedis:
                     intent = slots_data.get("intent")
                     sentiment = slots_data.get("sentiment")
                     metadata = slots_data.get("metadata", {})
-                    
+
                     history_turns = [ConversationTurn(**t) for t in (row.history or [])]
                     context = CallContext(
                         call_sid=chat_id,
@@ -83,13 +81,15 @@ class FakeRedis:
                 elif namespace == "whatsapp" or namespace == "generic":
                     if row.slots and "_raw_state" in row.slots:
                         return json.dumps(row.slots["_raw_state"])
-                    return json.dumps({
-                        "chat_id": row.chat_id,
-                        "channel": row.channel,
-                        "current_agent": row.current_agent,
-                        "slots": row.slots,
-                        "history": row.history,
-                    })
+                    return json.dumps(
+                        {
+                            "chat_id": row.chat_id,
+                            "channel": row.channel,
+                            "current_agent": row.current_agent,
+                            "slots": row.slots,
+                            "history": row.history,
+                        }
+                    )
                 else:
                     return row.slots.get("value") if row.slots else None
         return None
@@ -98,12 +98,11 @@ class FakeRedis:
         chat_id, namespace = _resolve_key(key)
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == chat_id,
-                ConversationState.namespace == namespace
+                ConversationState.chat_id == chat_id, ConversationState.namespace == namespace
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
-            
+
             if namespace == "call":
                 context_dict = json.loads(value)
                 current_agent = context_dict.get("current_agent_id")
@@ -111,10 +110,10 @@ class FakeRedis:
                     "collected_slots": context_dict.get("collected_slots", {}),
                     "intent": context_dict.get("intent"),
                     "sentiment": context_dict.get("sentiment"),
-                    "metadata": context_dict.get("metadata", {})
+                    "metadata": context_dict.get("metadata", {}),
                 }
                 history = context_dict.get("conversation_history", [])
-                
+
                 if row:
                     row.current_agent = current_agent
                     row.slots = slots
@@ -123,7 +122,7 @@ class FakeRedis:
                     row = ConversationState(
                         chat_id=chat_id,
                         namespace=namespace,
-                        channel=None, # Leave free
+                        channel=None,  # Leave free
                         current_agent=current_agent,
                         slots=slots,
                         history=history,
@@ -134,7 +133,7 @@ class FakeRedis:
                 current_agent = state.get("current_agent") or state.get("current_agent_id")
                 slots = state.get("slots") or state.get("collected_slots") or {}
                 history = state.get("history") or state.get("conversation_history") or []
-                
+
                 if row:
                     row.current_agent = current_agent
                     row.slots = slots if isinstance(slots, dict) else {"data": slots}
@@ -144,7 +143,7 @@ class FakeRedis:
                     row = ConversationState(
                         chat_id=chat_id,
                         namespace=namespace,
-                        channel="whatsapp", # WhatsApp channel value
+                        channel="whatsapp",  # WhatsApp channel value
                         current_agent=current_agent,
                         slots=slots if isinstance(slots, dict) else {"data": slots},
                         history=history,
@@ -172,8 +171,7 @@ class FakeRedis:
             for key in keys:
                 chat_id, namespace = _resolve_key(key)
                 stmt = select(ConversationState).where(
-                    ConversationState.chat_id == chat_id,
-                    ConversationState.namespace == namespace
+                    ConversationState.chat_id == chat_id, ConversationState.namespace == namespace
                 )
                 result = await session.execute(stmt)
                 row = result.scalar_one_or_none()
@@ -187,8 +185,7 @@ class FakeRedis:
     async def sadd(self, key: str, *members: str) -> None:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == key,
-                ConversationState.namespace == "redis_compat"
+                ConversationState.chat_id == key, ConversationState.namespace == "redis_compat"
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -210,8 +207,7 @@ class FakeRedis:
     async def srem(self, key: str, *members: str) -> None:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == key,
-                ConversationState.namespace == "redis_compat"
+                ConversationState.chat_id == key, ConversationState.namespace == "redis_compat"
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -224,8 +220,7 @@ class FakeRedis:
     async def smembers(self, key: str) -> Set[str]:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == key,
-                ConversationState.namespace == "redis_compat"
+                ConversationState.chat_id == key, ConversationState.namespace == "redis_compat"
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -240,8 +235,7 @@ class FakeRedis:
     async def hset(self, key: str, mapping: Dict[str, str]) -> None:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == key,
-                ConversationState.namespace == "redis_compat"
+                ConversationState.chat_id == key, ConversationState.namespace == "redis_compat"
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -263,8 +257,7 @@ class FakeRedis:
     async def hgetall(self, key: str) -> Dict[str, str]:
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == key,
-                ConversationState.namespace == "redis_compat"
+                ConversationState.chat_id == key, ConversationState.namespace == "redis_compat"
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -283,7 +276,7 @@ class FakeRedis:
             sql_pattern = pattern.replace("session:state:", "", 1).replace("*", "%")
         elif pattern.startswith("ticket:"):
             namespace = "redis_compat"
-            
+
         async with self._session_factory() as session:
             stmt = select(ConversationState.chat_id, ConversationState.namespace).where(
                 ConversationState.chat_id.like(sql_pattern)
@@ -311,13 +304,17 @@ class FakeRedis:
                     sql_pattern = self._match_pattern.replace("*", "%")
                     if self._match_pattern.startswith("call:context:"):
                         namespace = "call"
-                        sql_pattern = self._match_pattern.replace("call:context:", "", 1).replace("*", "%")
+                        sql_pattern = self._match_pattern.replace("call:context:", "", 1).replace(
+                            "*", "%"
+                        )
                     elif self._match_pattern.startswith("session:state:"):
                         namespace = "whatsapp"
-                        sql_pattern = self._match_pattern.replace("session:state:", "", 1).replace("*", "%")
+                        sql_pattern = self._match_pattern.replace("session:state:", "", 1).replace(
+                            "*", "%"
+                        )
                     elif self._match_pattern.startswith("conversation:"):
                         namespace = "redis_compat"
-                        
+
                     async with self._session_factory() as session:
                         stmt = select(ConversationState.chat_id, ConversationState.namespace).where(
                             ConversationState.chat_id.like(sql_pattern)
@@ -327,7 +324,7 @@ class FakeRedis:
                         result = await session.execute(stmt)
                         rows = result.all()
                         self._keys = [_reconstruct_key(row[0], row[1]) for row in rows]
-                
+
                 if self._index >= len(self._keys):
                     raise StopAsyncIteration
                 val = self._keys[self._index]
@@ -371,15 +368,14 @@ class StateManager:
             collected_slots={},
             metadata=metadata or {},
         )
-        
+
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.chat_id == call_sid, ConversationState.namespace == "call"
             )
             result = await session.execute(stmt)
             state = result.scalar_one_or_none()
-            
+
             if not state:
                 state = ConversationState(
                     chat_id=call_sid,
@@ -394,9 +390,9 @@ class StateManager:
                 state.current_agent = initial_agent_id
                 state.slots = {}
                 state.history = []
-            
+
             await session.commit()
-        
+
         logger.info("Created call state", call_sid=call_sid, agent_id=initial_agent_id)
         return context
 
@@ -404,21 +400,20 @@ class StateManager:
         """Get context for a call."""
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.chat_id == call_sid, ConversationState.namespace == "call"
             )
             result = await session.execute(stmt)
             state = result.scalar_one_or_none()
-            
+
             if state:
                 slots_data = state.slots or {}
                 collected_slots = slots_data.get("collected_slots", {})
                 intent = slots_data.get("intent")
                 sentiment = slots_data.get("sentiment")
                 metadata = slots_data.get("metadata", {})
-                
+
                 history_turns = [ConversationTurn(**t) for t in (state.history or [])]
-                
+
                 return CallContext(
                     call_sid=call_sid,
                     current_agent_id=state.current_agent or "primary_agent",
@@ -434,20 +429,19 @@ class StateManager:
         """Update call context."""
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.chat_id == call_sid, ConversationState.namespace == "call"
             )
             result = await session.execute(stmt)
             state = result.scalar_one_or_none()
-            
+
             slots = {
                 "collected_slots": context.collected_slots,
                 "intent": context.intent,
                 "sentiment": context.sentiment,
-                "metadata": context.metadata
+                "metadata": context.metadata,
             }
             history = [turn.model_dump() for turn in context.conversation_history]
-            
+
             if state:
                 state.current_agent = context.current_agent_id
                 state.slots = slots
@@ -468,8 +462,7 @@ class StateManager:
         """Delete call state (when call ends)."""
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.chat_id == call_sid, ConversationState.namespace == "call"
             )
             result = await session.execute(stmt)
             state = result.scalar_one_or_none()
@@ -500,11 +493,11 @@ class StateManager:
             metadata=metadata or {},
         )
         context.conversation_history.append(turn)
-        
+
         max_turns = 50
         if len(context.conversation_history) > max_turns:
             context.conversation_history = context.conversation_history[-max_turns:]
-        
+
         await self.update_call_context(call_sid, context)
 
     async def get_conversation_history(self, call_sid: str) -> List[ConversationTurn]:
@@ -581,9 +574,7 @@ class StateManager:
     async def get_active_calls(self) -> Set[str]:
         """Get all active call SIDs."""
         async with self._session_factory() as session:
-            stmt = select(ConversationState.chat_id).where(
-                ConversationState.namespace == "call"
-            )
+            stmt = select(ConversationState.chat_id).where(ConversationState.namespace == "call")
             result = await session.execute(stmt)
             return set(result.scalars().all())
 
@@ -591,8 +582,7 @@ class StateManager:
         """Check if a call is active."""
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == call_sid,
-                ConversationState.namespace == "call"
+                ConversationState.chat_id == call_sid, ConversationState.namespace == "call"
             )
             result = await session.execute(stmt)
             return result.scalar_one_or_none() is not None
@@ -607,11 +597,10 @@ class StateManager:
             parts = session_id.split(":", 1)
             namespace = parts[0]
             chat_id = parts[1]
-            
+
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == chat_id,
-                ConversationState.namespace == namespace
+                ConversationState.chat_id == chat_id, ConversationState.namespace == namespace
             )
             result = await session.execute(stmt)
             state_row = result.scalar_one_or_none()
@@ -635,19 +624,18 @@ class StateManager:
             parts = session_id.split(":", 1)
             namespace = parts[0]
             chat_id = parts[1]
-            
+
         current_agent = state.get("current_agent") or state.get("current_agent_id")
         slots = state.get("slots") or state.get("collected_slots") or {}
         history = state.get("history") or state.get("conversation_history") or []
-        
+
         async with self._session_factory() as session:
             stmt = select(ConversationState).where(
-                ConversationState.chat_id == chat_id,
-                ConversationState.namespace == namespace
+                ConversationState.chat_id == chat_id, ConversationState.namespace == namespace
             )
             result = await session.execute(stmt)
             state_row = result.scalar_one_or_none()
-            
+
             serialized_history = []
             for item in history:
                 if isinstance(item, dict):
@@ -657,9 +645,9 @@ class StateManager:
                         serialized_history.append(item.model_dump())
                     except AttributeError:
                         serialized_history.append(dict(item))
-            
+
             channel_val = namespace if namespace in ("whatsapp", "telegram") else None
-            
+
             if state_row:
                 state_row.current_agent = current_agent
                 state_row.slots = slots if isinstance(slots, dict) else {"data": slots}
@@ -678,7 +666,7 @@ class StateManager:
                 )
                 state_row.slots["_raw_state"] = state
                 session.add(state_row)
-            
+
             await session.commit()
         logger.debug("Set session state", session_id=session_id)
 

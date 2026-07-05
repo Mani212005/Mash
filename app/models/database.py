@@ -7,9 +7,16 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncAttrs, AsyncSession, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker, synonym
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    sessionmaker,
+    synonym,
+)
 
 from app.config import get_settings
 
@@ -28,33 +35,37 @@ class Call(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     channel_session_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     twilio_call_sid = synonym("channel_session_id")
-    
+
     # Call call_metadata
     direction: Mapped[str] = mapped_column(String(16))  # inbound, outbound
     from_number: Mapped[str] = mapped_column(String(32))
     to_number: Mapped[str] = mapped_column(String(32))
-    status: Mapped[str] = mapped_column(String(32), default="initiated")  # initiated, ringing, in-progress, completed, failed
-    
+    status: Mapped[str] = mapped_column(
+        String(32), default="initiated"
+    )  # initiated, ringing, in-progress, completed, failed
+
     # Timing
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    
+
     # Agent tracking
     current_agent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     agent_history: Mapped[list[str]] = mapped_column(JSON, default=list)
-    
+
     # call_Metadata
     call_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    
+
     # Relationships
-    events: Mapped[list["CallEvent"]] = relationship("CallEvent", back_populates="call", lazy="selectin")
-    transcripts: Mapped[list["Transcript"]] = relationship("Transcript", back_populates="call", lazy="selectin")
-    
-    __table_args__ = (
-        Index("ix_calls_status_started", "status", "started_at"),
+    events: Mapped[list["CallEvent"]] = relationship(
+        "CallEvent", back_populates="call", lazy="selectin"
     )
+    transcripts: Mapped[list["Transcript"]] = relationship(
+        "Transcript", back_populates="call", lazy="selectin"
+    )
+
+    __table_args__ = (Index("ix_calls_status_started", "status", "started_at"),)
 
 
 class CallEvent(Base):
@@ -63,24 +74,26 @@ class CallEvent(Base):
     __tablename__ = "call_events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    call_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("calls.id"), index=True)
-    
+    call_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("calls.id"), index=True
+    )
+
     # Event details
-    event_type: Mapped[str] = mapped_column(String(64))  # asr_transcript, agent_response, tool_call, agent_transfer, error
+    event_type: Mapped[str] = mapped_column(
+        String(64)
+    )  # asr_transcript, agent_response, tool_call, agent_transfer, error
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-    
+
     # Event data
     data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    
+
     # Performance metrics
     latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
-    
+
     # Relationship
     call: Mapped["Call"] = relationship("Call", back_populates="events")
-    
-    __table_args__ = (
-        Index("ix_call_events_call_type", "call_id", "event_type"),
-    )
+
+    __table_args__ = (Index("ix_call_events_call_type", "call_id", "event_type"),)
 
 
 class Transcript(Base):
@@ -89,21 +102,23 @@ class Transcript(Base):
     __tablename__ = "transcripts"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    call_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("calls.id"), index=True)
-    
+    call_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("calls.id"), index=True
+    )
+
     # Transcript content
     speaker: Mapped[str] = mapped_column(String(16))  # user, agent
     text: Mapped[str] = mapped_column(Text)
     is_final: Mapped[bool] = mapped_column(Boolean, default=True)
-    
+
     # Timing
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     start_time_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     end_time_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
-    
+
     # ASR call_metadata
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    
+
     # Relationship
     call: Mapped["Call"] = relationship("Call", back_populates="transcripts")
 
@@ -116,22 +131,24 @@ class Agent(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(128))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    
+
     # Agent configuration
     agent_type: Mapped[str] = mapped_column(String(32))  # primary, specialist, handoff
     system_prompt: Mapped[str] = mapped_column(Text)
-    
+
     # Tools and capabilities
     tools: Mapped[list[str]] = mapped_column(JSON, default=list)
     transfer_rules: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    
+
     # Settings
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class ToolInvocation(Base):
@@ -140,20 +157,22 @@ class ToolInvocation(Base):
     __tablename__ = "tool_invocations"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    call_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("calls.id"), index=True)
-    
+    call_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("calls.id"), index=True
+    )
+
     # Tool details
     tool_name: Mapped[str] = mapped_column(String(64))
     agent_id: Mapped[str] = mapped_column(String(64))
-    
+
     # Invocation data
     parameters: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    
+
     # Status
     status: Mapped[str] = mapped_column(String(32))  # pending, success, error
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    
+
     # Timing
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -172,7 +191,9 @@ class ConversationState(Base):
     current_agent: Mapped[str | None] = mapped_column(String(64), nullable=True)
     slots: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     history: Mapped[list[Any]] = mapped_column(JSONB, default=list)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     __table_args__ = (
         Index("ix_conversation_states_chat_namespace", "chat_id", "namespace", unique=True),

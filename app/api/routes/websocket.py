@@ -4,11 +4,10 @@ Mash Voice - WebSocket Routes
 Real-time WebSocket endpoints for live call updates.
 """
 
-import asyncio
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.state import get_state_manager
 from app.utils import get_logger
@@ -90,7 +89,7 @@ def get_connection_manager() -> ConnectionManager:
 async def call_live_stream(websocket: WebSocket, call_id: str):
     """
     WebSocket endpoint for live call updates.
-    
+
     Sends real-time events:
     - transcript: ASR transcripts
     - agent_response: Agent responses
@@ -98,16 +97,16 @@ async def call_live_stream(websocket: WebSocket, call_id: str):
     """
     manager = get_connection_manager()
     await manager.connect_call(call_id, websocket)
-    
+
     try:
         while True:
             # Keep connection alive and handle any incoming messages
             data = await websocket.receive_text()
-            
+
             # Handle ping/pong for keepalive
             if data == "ping":
                 await websocket.send_text("pong")
-            
+
     except WebSocketDisconnect:
         manager.disconnect_call(call_id, websocket)
     except Exception as e:
@@ -119,7 +118,7 @@ async def call_live_stream(websocket: WebSocket, call_id: str):
 async def dashboard_live_stream(websocket: WebSocket):
     """
     WebSocket endpoint for dashboard updates.
-    
+
     Sends real-time events:
     - call_started: New call initiated
     - call_ended: Call completed
@@ -128,26 +127,30 @@ async def dashboard_live_stream(websocket: WebSocket):
     """
     manager = get_connection_manager()
     await manager.connect_dashboard(websocket)
-    
+
     try:
         # Send initial state
         state_manager = get_state_manager()
         active_calls = await state_manager.get_active_calls()
-        
-        await websocket.send_text(json.dumps({
-            "type": "initial_state",
-            "data": {
-                "active_calls": list(active_calls),
-            },
-        }))
-        
+
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "initial_state",
+                    "data": {
+                        "active_calls": list(active_calls),
+                    },
+                }
+            )
+        )
+
         while True:
             # Keep connection alive
             data = await websocket.receive_text()
-            
+
             if data == "ping":
                 await websocket.send_text("pong")
-            
+
     except WebSocketDisconnect:
         manager.disconnect_dashboard(websocket)
     except Exception as e:
@@ -157,50 +160,62 @@ async def dashboard_live_stream(websocket: WebSocket):
 
 # Helper functions to send updates (called from other parts of the app)
 
+
 async def notify_transcript(call_id: str, speaker: str, text: str, is_final: bool):
     """Notify WebSocket clients of a transcript update."""
     manager = get_connection_manager()
-    await manager.send_to_call(call_id, {
-        "type": "transcript",
-        "data": {
-            "speaker": speaker,
-            "text": text,
-            "is_final": is_final,
+    await manager.send_to_call(
+        call_id,
+        {
+            "type": "transcript",
+            "data": {
+                "speaker": speaker,
+                "text": text,
+                "is_final": is_final,
+            },
         },
-    })
+    )
 
 
 async def notify_agent_response(call_id: str, agent_id: str, text: str):
     """Notify WebSocket clients of an agent response."""
     manager = get_connection_manager()
-    await manager.send_to_call(call_id, {
-        "type": "agent_response",
-        "data": {
-            "agent_id": agent_id,
-            "text": text,
+    await manager.send_to_call(
+        call_id,
+        {
+            "type": "agent_response",
+            "data": {
+                "agent_id": agent_id,
+                "text": text,
+            },
         },
-    })
+    )
 
 
 async def notify_call_event(call_id: str, event_type: str, data: dict[str, Any]):
     """Notify WebSocket clients of a call event."""
     manager = get_connection_manager()
-    
+
     # Send to call-specific connections
-    await manager.send_to_call(call_id, {
-        "type": "event",
-        "data": {
-            "event_type": event_type,
-            **data,
-        },
-    })
-    
-    # Also broadcast to dashboards for certain events
-    if event_type in ("call_started", "call_ended", "agent_transfer"):
-        await manager.broadcast_to_dashboards({
-            "type": event_type,
+    await manager.send_to_call(
+        call_id,
+        {
+            "type": "event",
             "data": {
-                "call_id": call_id,
+                "event_type": event_type,
                 **data,
             },
-        })
+        },
+    )
+
+    # Also broadcast to dashboards for certain events
+    if event_type in ("call_started", "call_ended", "agent_transfer"):
+        await manager.broadcast_to_dashboards(
+            {
+                "type": event_type,
+                "data": {
+                    "call_id": call_id,
+                    **data,
+                },
+            }
+        )

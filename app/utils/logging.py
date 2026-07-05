@@ -39,9 +39,11 @@ def setup_logging() -> None:
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.dev.ConsoleRenderer(colors=True)
-            if settings.debug
-            else structlog.processors.JSONRenderer(),
+            (
+                structlog.dev.ConsoleRenderer(colors=True)
+                if settings.debug
+                else structlog.processors.JSONRenderer()
+            ),
         ],
     )
 

@@ -8,9 +8,8 @@ import asyncio
 import json
 from datetime import datetime
 from typing import Any
-import uuid
 
-from app.tools import get_tool_registry, BaseTool, ToolResult
+from app.tools import ToolResult, get_tool_registry
 from app.utils.logging import CallLogger, get_logger
 
 logger = get_logger(__name__)
@@ -33,19 +32,19 @@ class ToolExecutor:
     ) -> ToolResult:
         """
         Execute a tool with full validation and error handling.
-        
+
         Args:
             tool_name: Name of the tool to execute
             parameters: Parameters for the tool
             call_sid: Optional call SID for logging
             agent_id: Optional agent ID for tracking
-            
+
         Returns:
             ToolResult with success/failure and data
         """
         log = CallLogger(call_sid) if call_sid else logger
         start_time = datetime.utcnow()
-        
+
         # Get tool
         tool = self._tool_registry.get(tool_name)
         if not tool:
@@ -54,7 +53,7 @@ class ToolExecutor:
                 success=False,
                 error=f"Tool '{tool_name}' not found",
             )
-        
+
         # Validate parameters
         is_valid, error = tool.validate_params(parameters)
         if not is_valid:
@@ -63,7 +62,7 @@ class ToolExecutor:
                 success=False,
                 error=error,
             )
-        
+
         # Execute with timeout
         try:
             log.info(
@@ -71,23 +70,23 @@ class ToolExecutor:
                 tool=tool_name,
                 timeout=tool.timeout_seconds,
             )
-            
+
             result = await asyncio.wait_for(
                 tool.execute(**parameters),
                 timeout=tool.timeout_seconds,
             )
-            
+
             duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
-            
+
             log.info(
                 "Tool execution complete",
                 tool=tool_name,
                 success=result.success,
                 duration_ms=duration_ms,
             )
-            
+
             return result
-            
+
         except asyncio.TimeoutError:
             duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
             log.error(
@@ -100,7 +99,7 @@ class ToolExecutor:
                 success=False,
                 error=f"Tool execution timed out after {tool.timeout_seconds} seconds",
             )
-            
+
         except Exception as e:
             duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
             log.exception(
@@ -122,12 +121,12 @@ class ToolExecutor:
     ) -> list[ToolResult]:
         """
         Execute multiple tools.
-        
+
         Args:
             tool_calls: List of tool call specs with name and parameters
             call_sid: Optional call SID for logging
             parallel: Whether to execute tools in parallel
-            
+
         Returns:
             List of ToolResults
         """
@@ -155,10 +154,10 @@ class ToolExecutor:
     def get_available_tools(self, agent_tools: list[str] | None = None) -> list[dict[str, Any]]:
         """
         Get available tool definitions.
-        
+
         Args:
             agent_tools: Optional list of tool names to filter by
-            
+
         Returns:
             List of tool definitions
         """
@@ -171,11 +170,11 @@ class ToolExecutor:
     ) -> tuple[bool, dict[str, Any] | None, str | None]:
         """
         Validate a tool call from LLM output.
-        
+
         Args:
             tool_name: Name of the tool
             arguments: JSON string of arguments
-            
+
         Returns:
             Tuple of (is_valid, parsed_args, error_message)
         """
@@ -183,18 +182,18 @@ class ToolExecutor:
         tool = self._tool_registry.get(tool_name)
         if not tool:
             return False, None, f"Tool '{tool_name}' not found"
-        
+
         # Parse arguments
         try:
             params = json.loads(arguments)
         except json.JSONDecodeError as e:
             return False, None, f"Invalid JSON arguments: {e}"
-        
+
         # Validate parameters
         is_valid, error = tool.validate_params(params)
         if not is_valid:
             return False, None, error
-        
+
         return True, params, None
 
 

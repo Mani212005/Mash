@@ -42,7 +42,7 @@ class ToolResult:
 class BaseTool(ABC):
     """
     Abstract base class for tools.
-    
+
     All tools must implement:
     - execute(): Run the tool with given parameters
     """
@@ -50,17 +50,17 @@ class BaseTool(ABC):
     # Class-level attributes (override in subclasses)
     name: str = "base_tool"
     description: str = "Base tool description"
-    
+
     # JSON Schema for parameters
     parameters: dict[str, Any] = {
         "type": "object",
         "properties": {},
         "required": [],
     }
-    
+
     # Required permissions (for access control)
     required_permissions: list[str] = []
-    
+
     # Timeout in seconds
     timeout_seconds: float = 30.0
 
@@ -71,10 +71,10 @@ class BaseTool(ABC):
     async def execute(self, **params: Any) -> ToolResult:
         """
         Execute the tool with the given parameters.
-        
+
         Args:
             **params: Tool-specific parameters
-            
+
         Returns:
             ToolResult with success/failure and data
         """
@@ -83,10 +83,10 @@ class BaseTool(ABC):
     def validate_params(self, params: dict[str, Any]) -> tuple[bool, str | None]:
         """
         Validate parameters against the schema.
-        
+
         Args:
             params: Parameters to validate
-            
+
         Returns:
             Tuple of (is_valid, error_message)
         """
@@ -95,13 +95,13 @@ class BaseTool(ABC):
         for req in required:
             if req not in params:
                 return False, f"Missing required parameter: {req}"
-        
+
         # Basic type checking
         properties = self.parameters.get("properties", {})
         for key, value in params.items():
             if key not in properties:
                 continue
-            
+
             expected_type = properties[key].get("type")
             if expected_type:
                 if expected_type == "string" and not isinstance(value, str):
@@ -114,7 +114,7 @@ class BaseTool(ABC):
                     return False, f"Parameter {key} must be an array"
                 elif expected_type == "object" and not isinstance(value, dict):
                     return False, f"Parameter {key} must be an object"
-        
+
         return True, None
 
     def get_definition(self) -> dict[str, Any]:
@@ -148,21 +148,17 @@ class ToolRegistry:
     def get_definitions(self, tool_names: list[str] | None = None) -> list[dict[str, Any]]:
         """
         Get tool definitions for LLM.
-        
+
         Args:
             tool_names: Optional list of specific tools to include
-            
+
         Returns:
             List of tool definitions
         """
         if tool_names is None:
             return [t.get_definition() for t in self._tools.values()]
-        
-        return [
-            self._tools[name].get_definition()
-            for name in tool_names
-            if name in self._tools
-        ]
+
+        return [self._tools[name].get_definition() for name in tool_names if name in self._tools]
 
 
 # Singleton registry

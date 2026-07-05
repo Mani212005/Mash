@@ -16,7 +16,7 @@ class SchedulerAgent(BaseAgent):
     name = "scheduler_agent"
     description = "Specialist for booking and managing appointments"
     agent_type = "specialist"
-    
+
     system_prompt = """You are a scheduling assistant helping callers book appointments.
 
 Your role is to:
@@ -52,10 +52,7 @@ Use the book_appointment and check_availability tools when appropriate."""
     async def get_farewell(self, context: CallContext) -> str:
         # Check if appointment was booked
         if context.collected_slots.get("appointment_confirmed"):
-            return (
-                f"Your appointment is confirmed. "
-                f"We'll see you then. Have a great day!"
-            )
+            return "Your appointment is confirmed. " "We'll see you then. Have a great day!"
         return "Feel free to call back when you're ready to schedule. Goodbye!"
 
 
@@ -67,7 +64,7 @@ class SupportAgent(BaseAgent):
     name = "support_agent"
     description = "Specialist for technical support and troubleshooting"
     agent_type = "specialist"
-    
+
     system_prompt = """You are a technical support specialist helping callers with issues.
 
 Your role is to:
@@ -90,7 +87,7 @@ If the issue is complex or the caller is frustrated, offer to transfer to a huma
         "lookup_customer",
         "check_system_status",
     ]
-    
+
     transfer_rules = {
         "human": "human_handoff_agent",
         "escalate": "human_handoff_agent",
@@ -114,7 +111,7 @@ class SalesAgent(BaseAgent):
     name = "sales_agent"
     description = "Specialist for sales and pricing information"
     agent_type = "specialist"
-    
+
     system_prompt = """You are a sales assistant helping potential customers.
 
 Your role is to:
@@ -141,7 +138,9 @@ Use the product_info and create_lead tools when appropriate."""
     ]
 
     async def get_greeting(self, context: CallContext) -> str:
-        return "I'd be happy to help with pricing and product information. What are you looking for?"
+        return (
+            "I'd be happy to help with pricing and product information. What are you looking for?"
+        )
 
 
 class HumanHandoffAgent(BaseAgent):
@@ -152,7 +151,7 @@ class HumanHandoffAgent(BaseAgent):
     name = "human_handoff_agent"
     description = "Handles escalation to human operators"
     agent_type = "handoff"
-    
+
     system_prompt = """You are preparing to transfer the caller to a human representative.
 
 Your role is to:

@@ -4,7 +4,7 @@ Mash Voice - Agent Tests
 
 import pytest
 
-from app.agents import BaseAgent, PrimaryAgent, SchedulerAgent
+from app.agents import PrimaryAgent, SchedulerAgent
 from app.models.schemas import CallContext
 
 

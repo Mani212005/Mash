@@ -4,22 +4,20 @@ Mash Voice - Agent Service (Orchestrator)
 Manages agent lifecycle, routing, and orchestration.
 """
 
-import asyncio
 import json
-from datetime import datetime
 from typing import Any
 
 from app.agents import (
     AgentResponse,
     BaseAgent,
     HumanHandoffAgent,
-    PrimaryAgent, 
+    PrimaryAgent,
     SalesAgent,
     SchedulerAgent,
     SupportAgent,
 )
 from app.agents.customer_service_agent import CustomerServiceAgent
-from app.core.state import StateManager, get_state_manager
+from app.core.state import get_state_manager
 from app.models.schemas import CallContext, ToolDefinition
 from app.tools import get_tool_registry, register_all_tools
 from app.utils.logging import CallLogger, get_logger
@@ -59,7 +57,7 @@ class AgentRegistry:
 class AgentOrchestrator:
     """
     Orchestrates agent interactions during calls.
-    
+
     Responsibilities:
     - Route calls to appropriate agents
     - Handle agent transfers
@@ -71,10 +69,10 @@ class AgentOrchestrator:
         self._agent_registry = AgentRegistry()
         self._state_manager = get_state_manager()
         self._tool_registry = get_tool_registry()
-        
+
         # Register default agents
         self._register_default_agents()
-        
+
         # Register tools
         register_all_tools()
 
@@ -107,38 +105,38 @@ class AgentOrchestrator:
     ) -> str:
         """
         Initialize a new call with the orchestrator.
-        
+
         Args:
             call_sid: Twilio call SID
             initial_agent: Agent to start the call
             metadata: Optional call metadata
-            
+
         Returns:
             Initial greeting from the agent
         """
         log = CallLogger(call_sid)
-        
+
         # Create call state
         context = await self._state_manager.create_call_state(
             call_sid=call_sid,
             initial_agent_id=initial_agent,
             metadata=metadata,
         )
-        
+
         # Get the initial agent
         agent = self._agent_registry.get(initial_agent)
         if not agent:
             agent = self._agent_registry.get("primary_agent")
-        
+
         # Get greeting
         greeting = await agent.get_greeting(context)
-        
+
         log.info(
             "Call initialized",
             agent=agent.name,
             greeting_length=len(greeting),
         )
-        
+
         # Add greeting to conversation history
         await self._state_manager.add_conversation_turn(
             call_sid=call_sid,
@@ -146,7 +144,7 @@ class AgentOrchestrator:
             content=greeting,
             metadata={"agent": agent.name, "type": "greeting"},
         )
-        
+
         return greeting
 
     async def process_input(
@@ -156,17 +154,17 @@ class AgentOrchestrator:
     ) -> AgentResponse:
         """
         Process user input and generate agent response.
-        
+
         Args:
             call_sid: Twilio call SID
             user_input: Transcribed user speech
-            
+
         Returns:
             AgentResponse with text and any tool calls
         """
         log = CallLogger(call_sid)
         log.info("Processing user input", input_length=len(user_input))
-        
+
         # Get current context
         context = await self._state_manager.get_call_context(call_sid)
         if not context:
@@ -176,30 +174,30 @@ class AgentOrchestrator:
                 text="I'm sorry, there was an error. Could you please call back?",
                 error="Context not found",
             )
-        
+
         # Add user input to history
         await self._state_manager.add_conversation_turn(
             call_sid=call_sid,
             role="user",
             content=user_input,
         )
-        
+
         # Get current agent
         agent = self._agent_registry.get(context.current_agent_id)
         if not agent:
             log.warning("Agent not found, using primary", agent=context.current_agent_id)
             agent = self._agent_registry.get("primary_agent")
-        
+
         # Get tool definitions for this agent
         tool_definitions = self._get_agent_tools(agent)
-        
+
         # Process with agent
         response = await agent.process(
             user_input=user_input,
             context=context,
             tool_definitions=tool_definitions,
         )
-        
+
         # Handle tool calls
         if response.tool_calls:
             response = await self._handle_tool_calls(
@@ -207,7 +205,7 @@ class AgentOrchestrator:
                 response=response,
                 context=context,
             )
-        
+
         # Check for agent transfer
         updated_context = await self._state_manager.get_call_context(call_sid)
         if updated_context:
@@ -219,7 +217,7 @@ class AgentOrchestrator:
                     to_agent=transfer_target,
                     context=updated_context,
                 )
-        
+
         # Add response to history
         await self._state_manager.add_conversation_turn(
             call_sid=call_sid,
@@ -227,43 +225,43 @@ class AgentOrchestrator:
             content=response.text,
             metadata={"agent": response.agent_id},
         )
-        
+
         log.info(
             "Generated response",
             agent=response.agent_id,
             response_length=len(response.text),
             tool_calls=len(response.tool_calls),
         )
-        
+
         return response
 
     async def end_call(self, call_sid: str) -> str:
         """
         End a call and get farewell message.
-        
+
         Args:
             call_sid: Twilio call SID
-            
+
         Returns:
             Farewell message from the agent
         """
         log = CallLogger(call_sid)
-        
+
         context = await self._state_manager.get_call_context(call_sid)
         if not context:
             return "Goodbye!"
-        
+
         agent = self._agent_registry.get(context.current_agent_id)
         if not agent:
             agent = self._agent_registry.get("primary_agent")
-        
+
         farewell = await agent.get_farewell(context)
-        
+
         # Clean up state
         await self._state_manager.delete_call_state(call_sid)
-        
+
         log.info("Call ended", agent=agent.name)
-        
+
         return farewell
 
     async def transfer_agent(
@@ -274,12 +272,12 @@ class AgentOrchestrator:
     ) -> AgentResponse:
         """
         Explicitly transfer to a different agent.
-        
+
         Args:
             call_sid: Twilio call SID
             target_agent: Name of agent to transfer to
             reason: Optional reason for transfer
-            
+
         Returns:
             Response from the new agent
         """
@@ -290,7 +288,7 @@ class AgentOrchestrator:
                 text="I'm sorry, there was an error with the transfer.",
                 error="Context not found",
             )
-        
+
         return await self._handle_agent_transfer(
             call_sid=call_sid,
             from_agent=context.current_agent_id,
@@ -322,7 +320,7 @@ class AgentOrchestrator:
     ) -> AgentResponse:
         """Execute tool calls and get updated response."""
         log = CallLogger(call_sid)
-        
+
         tool_results = []
         for tool_call in response.tool_calls:
             log.info(
@@ -330,50 +328,58 @@ class AgentOrchestrator:
                 tool=tool_call.name,
                 call_id=tool_call.id,
             )
-            
+
             tool = self._tool_registry.get(tool_call.name)
             if not tool:
-                tool_results.append({
-                    "tool_call_id": tool_call.id,
-                    "error": f"Tool '{tool_call.name}' not found",
-                })
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "error": f"Tool '{tool_call.name}' not found",
+                    }
+                )
                 continue
-            
+
             try:
                 # Parse arguments
                 args = json.loads(tool_call.arguments)
-                
+
                 # Execute tool
                 result = await tool.execute(**args)
-                
-                tool_results.append({
-                    "tool_call_id": tool_call.id,
-                    "name": tool_call.name,
-                    "result": result.to_dict(),
-                })
-                
+
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "name": tool_call.name,
+                        "result": result.to_dict(),
+                    }
+                )
+
                 # If tool has a message, update response
                 if result.message:
                     response.text = result.message
-                
+
                 log.info(
                     "Tool executed",
                     tool=tool_call.name,
                     success=result.success,
                 )
-                
+
             except json.JSONDecodeError as e:
-                tool_results.append({
-                    "tool_call_id": tool_call.id,
-                    "error": f"Invalid arguments: {e}",
-                })
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "error": f"Invalid arguments: {e}",
+                    }
+                )
             except Exception as e:
                 log.exception("Tool execution failed", tool=tool_call.name, error=str(e))
-                tool_results.append({
-                    "tool_call_id": tool_call.id,
-                    "error": str(e),
-                })
-        
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "error": str(e),
+                    }
+                )
+
         return response
 
     async def _handle_agent_transfer(
@@ -385,7 +391,7 @@ class AgentOrchestrator:
     ) -> AgentResponse:
         """Handle transfer between agents."""
         log = CallLogger(call_sid)
-        
+
         target = self._agent_registry.get(to_agent)
         if not target:
             log.warning("Transfer target not found", target=to_agent)
@@ -394,22 +400,22 @@ class AgentOrchestrator:
                 text="I apologize, I'm unable to transfer you at the moment.",
                 error=f"Agent '{to_agent}' not found",
             )
-        
+
         # Update context
         await self._state_manager.set_current_agent(call_sid, to_agent)
-        
+
         # Get updated context
         updated_context = await self._state_manager.get_call_context(call_sid)
-        
+
         # Get greeting from new agent
         greeting = await target.get_greeting(updated_context or context)
-        
+
         log.info(
             "Agent transfer complete",
             from_agent=from_agent,
             to_agent=to_agent,
         )
-        
+
         return AgentResponse(
             agent_id=to_agent,
             text=greeting,
@@ -424,21 +430,21 @@ class AgentOrchestrator:
     ) -> dict[str, Any]:
         """
         Process a message and return the response.
-        
+
         Simplified interface for WhatsApp integration.
-        
+
         Args:
             session_id: Session identifier
             message: User message text
             context: Optional context dict
-            
+
         Returns:
             Response dict with message, agent, options, etc.
         """
         try:
             # Get or create call context
             call_context = await self._state_manager.get_call_context(session_id)
-            
+
             if not call_context:
                 # Initialize new session
                 await self._state_manager.create_call_state(
@@ -447,23 +453,25 @@ class AgentOrchestrator:
                     metadata=context,
                 )
                 call_context = await self._state_manager.get_call_context(session_id)
-            
+
             # Process through the agent
             response = await self.process_input(
                 call_sid=session_id,
                 user_input=message,
             )
-            
+
             return {
                 "message": response.text,
                 "agent": response.agent_id,
-                "tool_calls": [tc.model_dump() for tc in response.tool_calls] if response.tool_calls else [],
+                "tool_calls": (
+                    [tc.model_dump() for tc in response.tool_calls] if response.tool_calls else []
+                ),
                 "transfer_to": response.transfer_to,
                 "context_update": response.context_updates,
                 "options": None,  # Can be extended to provide button options
                 "next_agent": response.transfer_to,
             }
-            
+
         except Exception as e:
             logger.exception("Error processing message", error=str(e))
             return {

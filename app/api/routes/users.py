@@ -9,7 +9,7 @@ import json
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 from app.core.state import get_state_manager
 from app.utils import get_logger
@@ -24,24 +24,28 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 class LinkPhoneRequest(BaseModel):
     """Request to link a phone number to a user."""
+
     email: str
     phone_number: str
 
 
 class UnlinkPhoneRequest(BaseModel):
     """Request to unlink a phone number from a user."""
+
     email: str
     phone_number: str
 
 
 class UserPhones(BaseModel):
     """Response with user's linked phone numbers."""
+
     email: str
     phone_numbers: List[str]
 
 
 class PhoneOwner(BaseModel):
     """Response with who owns a phone number."""
+
     phone_number: str
     owner_email: Optional[str] = None
 
@@ -72,7 +76,7 @@ async def get_user_phones(
 async def link_phone_number(request: LinkPhoneRequest):
     """
     Link a WhatsApp phone number to a user's Google account.
-    
+
     A phone number can only be owned by one user at a time.
     If the number is already linked to another user, it will be unlinked first.
     """
@@ -157,7 +161,7 @@ async def get_available_phones(
     email: str = Query(..., description="User's email to check ownership"),
 ):
     """
-    Get all WhatsApp phone numbers that have active conversations 
+    Get all WhatsApp phone numbers that have active conversations
     but are NOT yet linked to any user. These can be claimed.
     Also includes numbers already owned by this user.
     """

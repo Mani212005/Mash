@@ -7,8 +7,7 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, AliasChoices, computed_field
-
+from pydantic import AliasChoices, BaseModel, Field, computed_field
 
 # ============ Enums ============
 
@@ -63,7 +62,9 @@ class CallCreate(BaseModel):
     """Schema for creating an outbound call."""
 
     to_number: str = Field(..., description="Destination phone number (E.164 format)")
-    from_number: str | None = Field(None, description="Source phone number (defaults to configured)")
+    from_number: str | None = Field(
+        None, description="Source phone number (defaults to configured)"
+    )
     agent_id: str = Field(default="primary_agent", description="Initial agent to handle the call")
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -72,7 +73,11 @@ class CallResponse(BaseModel):
     """Schema for call response."""
 
     id: UUID
-    channel_session_id: str = Field(..., validation_alias=AliasChoices("channel_session_id", "twilio_call_sid"), serialization_alias="channel_session_id")
+    channel_session_id: str = Field(
+        ...,
+        validation_alias=AliasChoices("channel_session_id", "twilio_call_sid"),
+        serialization_alias="channel_session_id",
+    )
     direction: CallDirection
     from_number: str
     to_number: str
@@ -296,7 +301,11 @@ class ConversationTurn(BaseModel):
 class CallContext(BaseModel):
     """Schema for call context/state."""
 
-    channel_session_id: str = Field(..., validation_alias=AliasChoices("channel_session_id", "call_sid"), serialization_alias="channel_session_id")
+    channel_session_id: str = Field(
+        ...,
+        validation_alias=AliasChoices("channel_session_id", "call_sid"),
+        serialization_alias="channel_session_id",
+    )
     current_agent_id: str
     conversation_history: list[ConversationTurn] = Field(default_factory=list)
     collected_slots: dict[str, Any] = Field(default_factory=dict)

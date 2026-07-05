@@ -4,15 +4,11 @@ Mash Voice - Agent Management Routes
 REST API endpoints for agent configuration.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException
 
 from app.models import (
-    Agent,
-    AgentCreate,
     AgentList,
     AgentResponse,
-    get_db_session,
 )
 from app.services import get_orchestrator
 from app.utils import get_logger
@@ -28,7 +24,7 @@ async def list_agents():
     """
     orchestrator = get_orchestrator()
     agents = orchestrator._agent_registry.get_all()
-    
+
     agent_responses = []
     for name, agent in agents.items():
         agent_responses.append(
@@ -46,7 +42,7 @@ async def list_agents():
                 updated_at=None,
             )
         )
-    
+
     return AgentList(agents=agent_responses)
 
 
@@ -57,10 +53,10 @@ async def get_agent(agent_id: str):
     """
     orchestrator = get_orchestrator()
     agent = orchestrator.get_agent(agent_id)
-    
+
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     return AgentResponse(
         id=agent.name,
         name=agent.name.replace("_", " ").title(),
@@ -83,17 +79,18 @@ async def get_agent_tools(agent_id: str):
     """
     orchestrator = get_orchestrator()
     agent = orchestrator.get_agent(agent_id)
-    
+
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
+
     from app.tools import get_tool_registry
+
     registry = get_tool_registry()
-    
+
     tools = []
     for tool_name in agent.tools:
         tool = registry.get(tool_name)
         if tool:
             tools.append(tool.get_definition())
-    
+
     return {"agent_id": agent_id, "tools": tools}
