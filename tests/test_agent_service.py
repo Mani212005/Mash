@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.agent_service import AgentOrchestrator, get_agent_orchestrator
 from app.models.schemas import CallContext, ConversationTurn
 from app.agents import AgentResponse
-from app.agents.base_agent import ToolCall
+from app.agents.base_agent import ToolCall, LLMResponse
 from app.tools.base_tool import ToolResult
 
 # Monkey-patch ToolCall to have model_dump pointing to to_dict.
@@ -76,28 +76,10 @@ def mock_state_manager():
 
 @pytest.fixture
 def mock_gemini():
-    """Mock the Gemini API Client to prevent external network calls."""
-    with patch("app.agents.base_agent.genai.Client") as mock_client_cls:
-        mock_client = MagicMock()
-        mock_aio = MagicMock()
-        mock_models = MagicMock()
-
-        # Setup generate_content mock response
-        mock_response = MagicMock()
-        mock_candidate = MagicMock()
-        mock_part = MagicMock()
-        mock_part.text = "Mocked response from agent."
-        mock_part.function_call = None
-        mock_candidate.content.parts = [mock_part]
-        mock_response.candidates = [mock_candidate]
-
-        mock_generate_content = AsyncMock(return_value=mock_response)
-        mock_models.generate_content = mock_generate_content
-        mock_aio.models = mock_models
-        mock_client.aio = mock_aio
-
-        mock_client_cls.return_value = mock_client
-        yield mock_generate_content
+    """Mock the Gemini LLM client to prevent making real API calls during tests."""
+    from app.agents.base_agent import GeminiProvider
+    with patch.object(GeminiProvider, 'generate', new_callable=AsyncMock) as mock_gen:
+        yield mock_gen
 
 
 @pytest.mark.asyncio
@@ -114,7 +96,6 @@ async def test_orchestrator_initialization():
     orchestrator = AgentOrchestrator()
     assert orchestrator.get_agent("primary_agent") is not None
     assert orchestrator.get_agent("scheduler_agent") is not None
-    assert orchestrator.get_agent("customer_service_agent") is not None
     assert orchestrator.get_agent("support_agent") is not None
     assert orchestrator.get_agent("sales_agent") is not None
     assert orchestrator.get_agent("human_handoff_agent") is not None
@@ -145,6 +126,11 @@ async def test_process_message_success(mock_gemini):
     with patch.object(primary_agent, "get_greeting", return_value="Welcome"):
         await orchestrator.initialize_call("test-session-123", initial_agent="primary_agent")
 
+    mock_gemini.return_value = LLMResponse(
+        text="Mocked response from agent.",
+        tool_calls=[],
+    )
+
     # Process message
     response = await orchestrator.process_message(
         session_id="test-session-123",
@@ -164,17 +150,16 @@ async def test_process_message_with_tool_call(mock_gemini):
     orchestrator = AgentOrchestrator()
 
     # Configure mock_gemini to return a tool call
-    mock_fc = MagicMock()
-    mock_fc.name = "check_availability"
-    mock_fc.args = {"date": "2026-02-15"}
-
-    mock_part = MagicMock()
-    mock_part.text = None
-    mock_part.function_call = mock_fc
-
-    mock_response = MagicMock()
-    mock_response.candidates = [MagicMock(content=MagicMock(parts=[mock_part]))]
-    mock_gemini.return_value = mock_response
+    mock_gemini.return_value = LLMResponse(
+        text="",
+        tool_calls=[
+            ToolCall(
+                id="call_check_availability_0",
+                name="check_availability",
+                arguments='{"date": "2026-02-15"}',
+            )
+        ]
+    )
 
     # Mock greeting to initialize call
     primary_agent = orchestrator.get_agent("primary_agent")

@@ -128,3 +128,13 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
     """Create async HTTP client for testing."""
     async with AsyncClient(app=app, base_url="http://test") as ac:
         yield ac
+
+
+@pytest.fixture(autouse=True)
+def reset_orchestrator():
+    """Reset the AgentOrchestrator singleton to ensure test isolation."""
+    from app.services import agent_service
+    agent_service._orchestrator = None
+    yield
+    agent_service._orchestrator = None
+
