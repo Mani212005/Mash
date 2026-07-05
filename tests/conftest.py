@@ -111,8 +111,9 @@ def mock_llm_client():
             tool_calls=[]
         )
         
-    with patch.object(GeminiProvider, 'generate', mock_generate):
+    with patch("google.genai.Client"), patch.object(GeminiProvider, 'generate', mock_generate):
         yield
+
 
 
 @pytest.fixture(scope="session")
